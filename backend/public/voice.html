@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PoC Voice Test</title>
+    <style>
+      body { font-family: "Segoe UI", Tahoma, sans-serif; margin: 0; background: #f3f7fa; color: #10212f; }
+      .wrap { max-width: 900px; margin: 0 auto; padding: 20px; }
+      .card { background: #fff; border: 1px solid #d5e0ea; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+      label { display: block; font-size: 13px; margin: 8px 0 4px; color: #456; }
+      input, select, button { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid #c7d5df; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      button { background: #0d7b67; color: #fff; font-weight: 600; cursor: pointer; }
+      button:disabled { background: #9bb6b1; cursor: not-allowed; }
+      #pttBtn { background: #ac2d2d; }
+      #pttBtn.active { background: #0b8f35; }
+      pre { background: #0f1c27; color: #d9ecff; border-radius: 10px; padding: 10px; min-height: 170px; overflow: auto; }
+      .status { font-weight: 600; }
+      .debug-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .kv { background: #f5f9fc; border: 1px solid #d5e0ea; border-radius: 8px; padding: 8px; font-size: 13px; }
+      .kv b { display: inline-block; min-width: 120px; }
+      .meter { width: 100%; height: 14px; background: #dbe7ef; border-radius: 7px; overflow: hidden; }
+      .meter > span { display: block; height: 100%; width: 0%; background: #0d7b67; transition: width 0.12s linear; }
+      .inline { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+      .inline input { width: auto; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h2>PoC Voice Browser Test</h2>
+        <div class="row">
+          <div>
+            <label>User ID</label>
+            <input id="userId" value="u1" />
+          </div>
+          <div>
+            <label>Device ID</label>
+            <input id="deviceId" value="d1" />
+          </div>
+        </div>
+        <label>Channel</label>
+        <select id="channelId">
+          <option value="engineering" selected>engineering</option>
+          <option value="housekeeping">housekeeping</option>
+          <option value="security">security</option>
+          <option value="all-call">all-call</option>
+        </select>
+        <div class="row" style="margin-top: 10px;">
+          <button id="connectBtn">Connect Voice Session</button>
+          <button id="pttBtn" disabled>Hold To Talk (PTT)</button>
+        </div>
+        <label class="inline"><input type="checkbox" id="radioFxToggle" /> Radio FX (HT Style)</label>
+        <label for="radioPreset">Radio Preset</label>
+        <select id="radioPreset">
+          <option value="clean" selected>Clean Radio</option>
+          <option value="classic">Classic HT</option>
+        </select>
+        <p class="status" id="status">Status: idle</p>
+      </div>
+      <div class="card">
+        <h3>Remote Audio</h3>
+        <audio id="remoteAudio" autoplay playsinline controls></audio>
+      </div>
+      <div class="card">
+        <h3>Debug Panel</h3>
+        <div class="debug-grid">
+          <div class="kv"><b>WS State:</b><span id="dbgWs">idle</span></div>
+          <div class="kv"><b>PC State:</b><span id="dbgPc">idle</span></div>
+          <div class="kv"><b>ICE State:</b><span id="dbgIce">idle</span></div>
+          <div class="kv"><b>Signal State:</b><span id="dbgSignal">idle</span></div>
+          <div class="kv"><b>User:</b><span id="dbgUser">-</span></div>
+          <div class="kv"><b>Remote Peer:</b><span id="dbgPeer">-</span></div>
+          <div class="kv"><b>Channel:</b><span id="dbgChannel">-</span></div>
+          <div class="kv"><b>Floor Holder:</b><span id="dbgFloor">-</span></div>
+          <div class="kv"><b>Mic Track:</b><span id="dbgMicTrack">off</span></div>
+          <div class="kv"><b>Mic Level:</b><span id="dbgMicText">0%</span></div>
+        </div>
+        <div class="meter" style="margin-top: 10px;"><span id="micMeter"></span></div>
+      </div>
+      <div class="card">
+        <h3>Log</h3>
+        <pre id="log"></pre>
+      </div>
+    </div>
+    <script>
+      const state = {
+        token: "",
+        ws: null,
+        pc: null,
+        localStream: null,
+        localTrack: null,
+        remoteUserId: null,
+        remotePeers: new Set(),
+        userId: "",
+        channelId: "",
+        floorGranted: false,
+        joined: false,
+        floorHolderUserId: null,
+        audioContext: null,
+        analyser: null,
+        micLevelTimer: null,
+        debugTimer: null,
+        rawMicTrack: null,
+        outboundTrack: null,
+        dryGain: null,
+        wetGain: null,
+        highPass: null,
+        lowPass: null,
+        compressor: null,
+        drive: null,
+        makeup: null,
+        noiseGain: null
+      };
+
+      const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+      const logEl = document.getElementById("log");
+      const statusEl = document.getElementById("status");
+      const pttBtn = document.getElementById("pttBtn");
+      const dbg = {
+        ws: document.getElementById("dbgWs"),
+        pc: document.getElementById("dbgPc"),
+        ice: document.getElementById("dbgIce"),
+        signal: document.getElementById("dbgSignal"),
+        user: document.getElementById("dbgUser"),
+        peer: document.getElementById("dbgPeer"),
+        channel: document.getElementById("dbgChannel"),
+        floor: document.getElementById("dbgFloor"),
+        micTrack: document.getElementById("dbgMicTrack"),
+        micText: document.getElementById("dbgMicText"),
+        micMeter: document.getElementById("micMeter")
+      };
+
+      function log(msg, obj) {
+        const line = obj ? `${msg} ${JSON.stringify(obj)}` : msg;
+        logEl.textContent = `${new Date().toISOString()} ${line}\n${logEl.textContent}`.slice(0, 8000);
+      }
+
+      function setStatus(text) {
+        statusEl.textContent = `Status: ${text}`;
+      }
+
+      function updateDebug() {
+        dbg.ws.textContent = state.ws ? String(state.ws.readyState) : "null";
+        dbg.pc.textContent = state.pc ? state.pc.connectionState : "null";
+        dbg.ice.textContent = state.pc ? state.pc.iceConnectionState : "null";
+        dbg.signal.textContent = state.pc ? state.pc.signalingState : "null";
+        dbg.user.textContent = state.userId || "-";
+        dbg.peer.textContent = state.remoteUserId || "-";
+        dbg.channel.textContent = state.channelId || "-";
+        dbg.floor.textContent = state.floorHolderUserId || "-";
+        dbg.micTrack.textContent = state.localTrack ? (state.localTrack.enabled ? "enabled" : "disabled") : "none";
+      }
+
+      function setTrackEnabled(enabled) {
+        state.floorGranted = enabled;
+        if (state.outboundTrack) {
+          state.outboundTrack.enabled = enabled;
+        }
+        pttBtn.classList.toggle("active", enabled);
+        setStatus(enabled ? "talking (floor granted)" : "connected (listen mode)");
+        updateDebug();
+      }
+
+      function setRadioFxEnabled(enabled) {
+        if (!state.dryGain || !state.wetGain) return;
+        state.dryGain.gain.value = enabled ? 0.0 : 1.0;
+        state.wetGain.gain.value = enabled ? 1.0 : 0.0;
+        if (enabled) {
+          applyRadioPreset(document.getElementById("radioPreset").value);
+        }
+        log("radio fx", { enabled, preset: document.getElementById("radioPreset").value });
+      }
+
+      function applyRadioPreset(preset) {
+        if (!state.highPass || !state.lowPass || !state.compressor || !state.drive || !state.makeup || !state.noiseGain) return;
+        if (preset === "classic") {
+          state.highPass.frequency.value = 350;
+          state.lowPass.frequency.value = 3000;
+          state.compressor.threshold.value = -30;
+          state.compressor.ratio.value = 4;
+          state.compressor.attack.value = 0.002;
+          state.compressor.release.value = 0.24;
+          state.drive.curve = createDistortionCurve(180);
+          state.makeup.gain.value = 1.0;
+          state.noiseGain.gain.value = 0.008;
+        } else {
+          state.highPass.frequency.value = 300;
+          state.lowPass.frequency.value = 3400;
+          state.compressor.threshold.value = -24;
+          state.compressor.ratio.value = 2.5;
+          state.compressor.attack.value = 0.004;
+          state.compressor.release.value = 0.18;
+          state.drive.curve = createDistortionCurve(90);
+          state.makeup.gain.value = 0.9;
+          state.noiseGain.gain.value = 0.0;
+        }
+        log("radio preset", { preset });
+      }
+
+      function sendWs(payload) {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+        state.ws.send(JSON.stringify(payload));
+      }
+
+      async function login() {
+        const userId = document.getElementById("userId").value.trim();
+        const deviceId = document.getElementById("deviceId").value.trim();
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, deviceId })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "login failed");
+        state.token = data.accessToken;
+        state.userId = userId;
+        return data;
+      }
+
+      async function createPeerConnection() {
+        if (state.pc) return state.pc;
+        state.pc = new RTCPeerConnection(iceConfig);
+
+        state.pc.onicecandidate = (event) => {
+          if (!event.candidate || !state.remoteUserId) return;
+          sendWs({
+            type: "webrtc_ice",
+            toUserId: state.remoteUserId,
+            candidate: event.candidate
+          });
+        };
+
+        state.pc.ontrack = (event) => {
+          document.getElementById("remoteAudio").srcObject = event.streams[0];
+          log("remote track attached");
+        };
+
+        return state.pc;
+      }
+
+      async function setupLocalAudio() {
+        if (state.localStream) return;
+        const rawStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        state.rawMicTrack = rawStream.getAudioTracks()[0];
+
+        state.audioContext = new AudioContext();
+        const source = state.audioContext.createMediaStreamSource(rawStream);
+        const destination = state.audioContext.createMediaStreamDestination();
+
+        state.highPass = state.audioContext.createBiquadFilter();
+        state.highPass.type = "highpass";
+        state.lowPass = state.audioContext.createBiquadFilter();
+        state.lowPass.type = "lowpass";
+        state.compressor = state.audioContext.createDynamicsCompressor();
+        state.drive = state.audioContext.createWaveShaper();
+        state.drive.oversample = "4x";
+        state.makeup = state.audioContext.createGain();
+        state.noiseGain = state.audioContext.createGain();
+        state.noiseGain.gain.value = 0.0;
+
+        state.dryGain = state.audioContext.createGain();
+        state.wetGain = state.audioContext.createGain();
+        state.dryGain.gain.value = 1.0;
+        state.wetGain.gain.value = 0.0;
+
+        source.connect(state.dryGain);
+        source.connect(state.highPass);
+        state.highPass.connect(state.lowPass);
+        state.lowPass.connect(state.compressor);
+        state.compressor.connect(state.drive);
+        state.drive.connect(state.makeup);
+        state.makeup.connect(state.wetGain);
+
+        const noiseSource = createNoiseSource(state.audioContext);
+        noiseSource.connect(state.noiseGain);
+        state.noiseGain.connect(state.wetGain);
+        noiseSource.start();
+
+        state.dryGain.connect(destination);
+        state.wetGain.connect(destination);
+        applyRadioPreset(document.getElementById("radioPreset").value);
+
+        state.localStream = destination.stream;
+        state.localTrack = state.rawMicTrack;
+        state.outboundTrack = state.localStream.getAudioTracks()[0];
+        state.outboundTrack.enabled = false;
+
+        const pc = await createPeerConnection();
+        state.localStream.getTracks().forEach((t) => pc.addTrack(t, state.localStream));
+        log("local mic ready (processed stream, muted until floor granted)");
+      }
+
+      async function makeOffer(toUserId) {
+        state.remoteUserId = toUserId;
+        state.remotePeers.add(toUserId);
+        const pc = await createPeerConnection();
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        sendWs({ type: "webrtc_offer", toUserId, sdp: offer });
+        log("sent offer", { toUserId });
+      }
+
+      async function handleOffer(fromUserId, sdp) {
+        state.remoteUserId = fromUserId;
+        state.remotePeers.add(fromUserId);
+        const pc = await createPeerConnection();
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendWs({ type: "webrtc_answer", toUserId: fromUserId, sdp: answer });
+        log("sent answer", { toUserId: fromUserId });
+      }
+
+      async function connectVoice() {
+        const loginData = await login();
+        state.channelId = document.getElementById("channelId").value;
+        log("logged in", { user: loginData.user });
+        await setupLocalAudio();
+
+        state.ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/signaling`);
+        state.ws.onopen = () => {
+          sendWs({ type: "join_channel", userId: state.userId, channelId: state.channelId });
+          sendWs({ type: "floor_state", channelId: state.channelId });
+          state.joined = true;
+          pttBtn.disabled = false;
+          setStatus("connected");
+          log("ws connected");
+          updateDebug();
+        };
+        state.ws.onclose = () => updateDebug();
+        state.ws.onerror = () => updateDebug();
+
+        state.ws.onmessage = async (event) => {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "peer_joined" && msg.userId !== state.userId) {
+            state.remotePeers.add(msg.userId);
+            if (state.userId < msg.userId) {
+              await makeOffer(msg.userId);
+            }
+          } else if (msg.type === "join_ack") {
+            const peers = Array.isArray(msg.peers) ? msg.peers : [];
+            for (const peerId of peers) {
+              if (peerId === state.userId) continue;
+              state.remotePeers.add(peerId);
+              if (state.userId < peerId) {
+                await makeOffer(peerId);
+              }
+            }
+            log("join ack", { peers });
+          } else if (msg.type === "webrtc_offer" && msg.fromUserId !== state.userId) {
+            await handleOffer(msg.fromUserId, msg.sdp);
+          } else if (msg.type === "webrtc_answer" && msg.fromUserId === state.remoteUserId) {
+            const pc = await createPeerConnection();
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+            log("received answer", { fromUserId: msg.fromUserId });
+          } else if (msg.type === "webrtc_ice" && msg.fromUserId === state.remoteUserId && msg.candidate) {
+            const pc = await createPeerConnection();
+            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          } else if (msg.type === "floor_granted") {
+            state.floorHolderUserId = msg.holder ? msg.holder.userId : null;
+            const mine = msg.holder && msg.holder.userId === state.userId;
+            setTrackEnabled(Boolean(mine));
+            log("floor granted", msg.holder);
+          } else if (msg.type === "floor_released") {
+            state.floorHolderUserId = null;
+            setTrackEnabled(false);
+            log("floor released");
+          } else if (msg.type === "floor_busy") {
+            state.floorHolderUserId = msg.holder ? msg.holder.userId : null;
+            setTrackEnabled(false);
+            log("floor busy", msg.holder);
+          } else if (msg.type === "floor_state") {
+            state.floorHolderUserId = msg.holder ? msg.holder.userId : null;
+            const mine = msg.holder && msg.holder.userId === state.userId;
+            setTrackEnabled(Boolean(mine));
+            log("floor state", msg.holder);
+          } else if (msg.type === "error") {
+            log("server error", msg);
+          }
+          updateDebug();
+        };
+      }
+
+      document.getElementById("connectBtn").onclick = async () => {
+        try {
+          await connectVoice();
+        } catch (error) {
+          log("connect error", { message: error.message });
+          setStatus("error");
+        }
+      };
+
+      pttBtn.onmousedown = () => {
+        if (!state.joined) return;
+        sendWs({ type: "request_talk", userId: state.userId, channelId: state.channelId });
+      };
+      pttBtn.onmouseup = () => {
+        if (!state.joined) return;
+        sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
+      };
+      pttBtn.onmouseleave = () => {
+        if (!state.joined || !state.floorGranted) return;
+        sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
+      };
+      pttBtn.ontouchstart = (e) => {
+        e.preventDefault();
+        if (!state.joined) return;
+        sendWs({ type: "request_talk", userId: state.userId, channelId: state.channelId });
+      };
+      pttBtn.ontouchend = (e) => {
+        e.preventDefault();
+        if (!state.joined) return;
+        sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
+      };
+
+      function startMicMeter() {
+        if (!state.rawMicTrack || state.analyser || !state.audioContext) return;
+        const source = state.audioContext.createMediaStreamSource(new MediaStream([state.rawMicTrack]));
+        state.analyser = state.audioContext.createAnalyser();
+        state.analyser.fftSize = 256;
+        source.connect(state.analyser);
+        const data = new Uint8Array(state.analyser.frequencyBinCount);
+        state.micLevelTimer = setInterval(() => {
+          state.analyser.getByteTimeDomainData(data);
+          let peak = 0;
+          for (let i = 0; i < data.length; i += 1) {
+            const v = Math.abs(data[i] - 128);
+            if (v > peak) peak = v;
+          }
+          const percent = Math.min(100, Math.round((peak / 128) * 100));
+          dbg.micText.textContent = `${percent}%`;
+          dbg.micMeter.style.width = `${percent}%`;
+        }, 120);
+      }
+
+      const originalSetupLocalAudio = setupLocalAudio;
+      setupLocalAudio = async function wrappedSetupLocalAudio() {
+        await originalSetupLocalAudio();
+        startMicMeter();
+        setRadioFxEnabled(document.getElementById("radioFxToggle").checked);
+      };
+
+      function createDistortionCurve(amount) {
+        const k = typeof amount === "number" ? amount : 50;
+        const nSamples = 44100;
+        const curve = new Float32Array(nSamples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < nSamples; i += 1) {
+          const x = (i * 2) / nSamples - 1;
+          curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
+      }
+
+      document.getElementById("radioFxToggle").onchange = (e) => {
+        setRadioFxEnabled(e.target.checked);
+      };
+      document.getElementById("radioPreset").onchange = (e) => {
+        applyRadioPreset(e.target.value);
+        if (document.getElementById("radioFxToggle").checked) {
+          log("radio fx preset changed live", { preset: e.target.value });
+        }
+      };
+
+      function createNoiseSource(audioContext) {
+        const bufferSize = 2 * audioContext.sampleRate;
+        const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i += 1) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        const whiteNoise = audioContext.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+        whiteNoise.loop = true;
+        return whiteNoise;
+      }
+
+      state.debugTimer = setInterval(updateDebug, 400);
+      updateDebug();
+    </script>
+  </body>
+</html>

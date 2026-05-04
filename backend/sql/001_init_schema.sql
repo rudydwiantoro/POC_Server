@@ -101,6 +101,20 @@ CREATE TABLE IF NOT EXISTS ptt_text_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS ptt_image_messages (
+  id UUID PRIMARY KEY,
+  channel_id UUID NOT NULL REFERENCES channels(id),
+  speaker_user_id UUID NOT NULL REFERENCES users(id),
+  device_id UUID REFERENCES devices(id),
+  image_path TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  note_text VARCHAR(160),
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  accuracy_m DOUBLE PRECISION,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_location_points_device_time
   ON location_points(device_id, recorded_at DESC);
 
@@ -116,3 +130,6 @@ CREATE INDEX IF NOT EXISTS idx_ptt_messages_speaker_time
 
 CREATE INDEX IF NOT EXISTS idx_ptt_text_messages_channel_time
   ON ptt_text_messages(channel_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ptt_image_messages_channel_time
+  ON ptt_image_messages(channel_id, created_at DESC);

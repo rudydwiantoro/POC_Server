@@ -17,6 +17,7 @@ class SignalingClient(
         fun onStatus(status: String)
         fun onFloorHolder(userId: String?)
         fun onPttTextMessage(userId: String?, text: String)
+        fun onPttImageMessage(userId: String?, imageUrl: String, noteText: String)
         fun onError(message: String)
     }
 
@@ -54,6 +55,14 @@ class SignalingClient(
                             "ptt_text" -> {
                                 val sender = if (msg.has("userId")) msg.optString("userId") else null
                                 callback.onPttTextMessage(sender, msg.optString("text", ""))
+                            }
+                            "ptt_image" -> {
+                                val sender = if (msg.has("userId")) msg.optString("userId") else null
+                                callback.onPttImageMessage(
+                                    sender,
+                                    msg.optString("imageUrl", ""),
+                                    msg.optString("noteText", "")
+                                )
                             }
                             "error" -> callback.onError(msg.optString("message", "signaling error"))
                         }

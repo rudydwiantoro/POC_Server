@@ -1,7 +1,10 @@
 package com.poc.radio
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.location.Location
+import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.view.MotionEvent
@@ -10,13 +13,17 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.poc.radio.net.ApiClient
 import com.poc.radio.net.SignalingClient
 import com.poc.radio.service.PttForegroundService
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity(), SignalingClient.Callback {
@@ -25,6 +32,9 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
     private lateinit var btnPtt: Button
     private lateinit var btnSendShortMessage: Button
     private lateinit var etShortMessage: EditText
+    private lateinit var etPhotoNote: EditText
+    private lateinit var btnTakePhoto: ImageButton
+    private lateinit var btnOpenHistory: Button
     private lateinit var tvMiniDisplay: TextView
     private lateinit var tvFloorStatus: TextView
     private lateinit var tvSignalStatus: TextView
@@ -32,6 +42,9 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
 
     private var signalingClient: SignalingClient? = null
     private var isConnected = false
+    private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
+        if (bmp != null) confirmAndUploadPhoto(bmp)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +57,9 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
         btnPtt = findViewById(R.id.btnPtt)
         btnSendShortMessage = findViewById(R.id.btnSendShortMessage)
         etShortMessage = findViewById(R.id.etShortMessage)
+        etPhotoNote = findViewById(R.id.etPhotoNote)
+        btnTakePhoto = findViewById(R.id.btnTakePhoto)
+        btnOpenHistory = findViewById(R.id.btnOpenHistory)
         tvMiniDisplay = findViewById(R.id.tvMiniDisplay)
         tvFloorStatus = findViewById(R.id.tvFloorStatus)
         tvSignalStatus = findViewById(R.id.tvSignalStatus)
@@ -95,6 +111,8 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
             signalingClient?.sendPttText(selectedChannel(), text)
             etShortMessage.text?.clear()
         }
+        btnTakePhoto.setOnClickListener { takePictureLauncher.launch(null) }
+        btnOpenHistory.setOnClickListener { startActivity(Intent(this, HistoryActivity::class.java)) }
     }
 
     private fun connectSignaling() {
@@ -138,6 +156,8 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
             btnPtt.isEnabled = connected
             etShortMessage.isEnabled = connected
             btnSendShortMessage.isEnabled = connected
+            etPhotoNote.isEnabled = connected
+            btnTakePhoto.isEnabled = connected
             if (connected) {
                 loadLatestTextFromDb(selectedChannel())
             } else {
@@ -165,6 +185,14 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
         }
     }
 
+    override fun onPttImageMessage(userId: String?, imageUrl: String, noteText: String) {
+        runOnUiThread {
+            val sender = userId ?: "unknown"
+            tvSignalStatus.text = "Signal: image masuk dari $sender"
+            tvMiniDisplay.text = "$sender kirim image: $noteText"
+        }
+    }
+
     private fun loadLatestTextFromDb(channelId: String) {
         val token = AppConfig.token(this)
         if (token.isBlank()) return
@@ -178,5 +206,51 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
                 }
             }
         }
+    }
+
+    private fun confirmAndUploadPhoto(bitmap: Bitmap) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Kirim Foto")
+            .setMessage("Kirim foto ini ke channel ${selectedChannel()}?")
+            .setNegativeButton("Batal", null)
+            .setPositiveButton("Kirim") { _, _ -> uploadPhoto(bitmap) }
+            .show()
+    }
+
+    private fun uploadPhoto(bitmap: Bitmap) {
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 55, out)
+        val base64 = android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+        val token = AppConfig.token(this)
+        val note = etPhotoNote.text?.toString()?.trim().orEmpty()
+        val gps = currentGps()
+        thread {
+            val res = apiClient.uploadPttImage(
+                accessToken = token,
+                userId = AppConfig.userId(this),
+                deviceId = AppConfig.deviceId(this),
+                channelId = selectedChannel(),
+                imageBase64 = base64,
+                noteText = note,
+                gps = gps
+            )
+            runOnUiThread {
+                res.onSuccess {
+                    tvSignalStatus.text = "Signal: image uploaded"
+                    if (note.isNotBlank()) tvMiniDisplay.text = "me: $note"
+                }.onFailure { tvSignalStatus.text = "Signal: upload image gagal (${it.message})" }
+            }
+        }
+    }
+
+    private fun currentGps(): JSONObject? {
+        return runCatching {
+            val lm = getSystemService(LOCATION_SERVICE) as LocationManager
+            val loc: Location? = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            if (loc == null) null else JSONObject()
+                .put("latitude", loc.latitude)
+                .put("longitude", loc.longitude)
+                .put("accuracyM", loc.accuracy.toDouble())
+        }.getOrNull()
     }
 }

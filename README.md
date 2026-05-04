@@ -69,6 +69,7 @@ Channels/PTT:
 - `POST /api/ptt/floor/messages/upload`
 - `POST /api/ptt/floor/messages/text`
 - `GET /api/ptt/floor/messages/text/latest?channelId=<id>`
+- `POST /api/ptt/floor/messages/image`
 
 Location:
 - `POST /api/location/update`
@@ -119,6 +120,7 @@ Additional tables:
 - `user_menu_permissions`
 - `ptt_messages`
 - `ptt_text_messages`
+- `ptt_image_messages`
 
 Jika upgrade dari schema lama:
 ```bash
@@ -129,6 +131,7 @@ npm run init-db
 Atau jika ingin migration terpisah untuk DB existing:
 ```bash
 psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/002_add_ptt_text_messages.sql
+psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/003_add_ptt_image_messages.sql
 ```
 
 ## Operation Manual

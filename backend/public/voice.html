@@ -116,6 +116,11 @@
               <option value="security">security</option>
               <option value="all-call">all-call</option>
             </select>
+            <label>Voice Style</label>
+            <select id="voiceStyle">
+              <option value="clean">clean</option>
+              <option value="radio">radio</option>
+            </select>
             </div>
             <div class="icon-row">
               <button id="btnSpeaker" class="icon-btn icon-only" title="Enable Speaker"><i class="fa-solid fa-volume-high"></i></button>
@@ -135,7 +140,8 @@
       const state = {
         token: "", ws: null, pc: null, localStream: null, outboundTrack: null, rawMicTrack: null,
         userId: "", deviceId: "", channelId: "engineering", joined: false, floorGranted: false,
-        remoteUserId: null, floorHolderUserId: null, mediaRecorder: null, recordChunks: [], recordStartedAt: null
+        remoteUserId: null, floorHolderUserId: null, mediaRecorder: null, recordChunks: [], recordStartedAt: null,
+        audioContext: null, dryGain: null, wetGain: null, highPass: null, lowPass: null, compressor: null
       };
       const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
       const logEl = document.getElementById("log");
@@ -200,14 +206,63 @@
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error("microphone API unavailable. open via HTTPS (or localhost), then allow mic permission");
         }
-        const raw = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const raw = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
+        });
         state.rawMicTrack = raw.getAudioTracks()[0];
-        state.localStream = raw;
+        state.audioContext = new AudioContext();
+        const source = state.audioContext.createMediaStreamSource(raw);
+        const dest = state.audioContext.createMediaStreamDestination();
+        state.dryGain = state.audioContext.createGain();
+        state.wetGain = state.audioContext.createGain();
+        state.highPass = state.audioContext.createBiquadFilter();
+        state.highPass.type = "highpass";
+        state.lowPass = state.audioContext.createBiquadFilter();
+        state.lowPass.type = "lowpass";
+        state.compressor = state.audioContext.createDynamicsCompressor();
+        source.connect(state.dryGain);
+        source.connect(state.highPass);
+        state.highPass.connect(state.lowPass);
+        state.lowPass.connect(state.compressor);
+        state.compressor.connect(state.wetGain);
+        state.dryGain.connect(dest);
+        state.wetGain.connect(dest);
+        state.localStream = dest.stream;
+        applyVoiceStyle(document.getElementById("voiceStyle").value);
         state.outboundTrack = state.localStream.getAudioTracks()[0];
         state.outboundTrack.enabled = false;
         const pc = await createPeerConnection();
         state.localStream.getTracks().forEach((t) => pc.addTrack(t, state.localStream));
         log("local mic ready");
+      }
+
+      function applyVoiceStyle(style) {
+        if (!state.dryGain || !state.wetGain || !state.highPass || !state.lowPass || !state.compressor) return;
+        if (style === "radio") {
+          state.dryGain.gain.value = 0.0;
+          state.wetGain.gain.value = 1.0;
+          state.highPass.frequency.value = 350;
+          state.lowPass.frequency.value = 3000;
+          state.compressor.threshold.value = -30;
+          state.compressor.ratio.value = 4;
+          state.compressor.attack.value = 0.003;
+          state.compressor.release.value = 0.25;
+        } else {
+          state.dryGain.gain.value = 1.0;
+          state.wetGain.gain.value = 0.0;
+          state.highPass.frequency.value = 120;
+          state.lowPass.frequency.value = 7000;
+          state.compressor.threshold.value = -20;
+          state.compressor.ratio.value = 2;
+          state.compressor.attack.value = 0.005;
+          state.compressor.release.value = 0.1;
+        }
+        log("voice style", { style });
       }
       async function makeOffer(toUserId) {
         state.remoteUserId = toUserId;
@@ -398,11 +453,18 @@
         state.channelId = document.getElementById("channelId").value;
         localStorage.setItem("poc_voice_channel", state.channelId);
       };
+      document.getElementById("voiceStyle").onchange = () => {
+        const style = document.getElementById("voiceStyle").value;
+        localStorage.setItem("poc_voice_style", style);
+        applyVoiceStyle(style);
+      };
 
       (async () => {
         const params = new URLSearchParams(location.search);
         const c = localStorage.getItem("poc_voice_channel") || "engineering";
+        const st = localStorage.getItem("poc_voice_style") || "clean";
         document.getElementById("channelId").value = params.get("channelId") || c;
+        document.getElementById("voiceStyle").value = st;
         // When opened inside dispatcher quick-PTT panel, parent controls channel.
         if (params.get("embedded") === "1") {
           const cw = document.getElementById("channelWrap");

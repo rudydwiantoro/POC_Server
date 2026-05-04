@@ -49,6 +49,9 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        if (AppConfig.beaconEnabled(this)) {
+            startPttService()
+        }
 
         findViewById<TextView>(R.id.tvUserInfo).text =
             "User: ${AppConfig.userId(this)} / ${AppConfig.deviceId(this)}"
@@ -128,7 +131,9 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
     private fun disconnectSignaling() {
         signalingClient?.close()
         signalingClient = null
-        stopService(Intent(this, PttForegroundService::class.java))
+        if (!AppConfig.beaconEnabled(this)) {
+            stopService(Intent(this, PttForegroundService::class.java))
+        }
     }
 
     private fun selectedChannel(): String = spChannel.selectedItem?.toString() ?: "engineering"

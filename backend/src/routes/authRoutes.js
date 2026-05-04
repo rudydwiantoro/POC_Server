@@ -28,7 +28,21 @@ router.post("/login", async (req, res) => {
     return res.json({
       accessToken: issueAccessToken(payload),
       refreshToken: issueRefreshToken(payload),
-      user: { userId: payload.userId, deviceId: payload.deviceId, role: payload.role, channelIds }
+      user: {
+        userId: payload.userId,
+        deviceId: payload.deviceId,
+        role: payload.role,
+        channelIds,
+        beacon: {
+          enabled: Boolean(account.beacon_enabled),
+          intervalMin: Number(account.beacon_interval_min) || 15,
+          distanceKm: Number(account.beacon_distance_km) || 1,
+          mode: account.beacon_mode === "eco" ? "eco" : "normal",
+          batchSize: Number(account.beacon_batch_size) || 50,
+          batchMaxWaitMin: Number(account.beacon_batch_max_wait_min) || 120,
+          normalSendMin: Number(account.beacon_normal_send_min) || 60
+        }
+      }
     });
   } catch (error) {
     return res.status(500).json({ error: "login failed" });

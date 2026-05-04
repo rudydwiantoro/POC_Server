@@ -46,7 +46,19 @@ class LoginActivity : AppCompatActivity() {
                 runOnUiThread {
                     btnLogin.isEnabled = true
                     result.onSuccess {
-                        AppConfig.saveSession(this, it.accessToken, it.userId, it.deviceId)
+                        AppConfig.saveSession(
+                            this,
+                            token = it.accessToken,
+                            userId = it.userId,
+                            deviceId = it.deviceId,
+                            beaconEnabled = it.beaconEnabled,
+                            beaconIntervalMin = it.beaconIntervalMin,
+                            beaconDistanceKm = it.beaconDistanceKm,
+                            beaconMode = it.beaconMode,
+                            beaconBatchSize = it.beaconBatchSize,
+                            beaconBatchMaxWaitMin = it.beaconBatchMaxWaitMin,
+                            beaconNormalSendMin = it.beaconNormalSendMin
+                        )
                         tvStatus.text = "Status: login success (${it.role})"
                         startActivity(Intent(this, MainActivity::class.java))
                     }.onFailure { err ->

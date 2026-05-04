@@ -8,7 +8,14 @@ async function getUserWithDevice(username, deviceLabel) {
       u.display_name,
       u.role,
       d.id AS device_id,
-      d.device_label
+      d.device_label,
+      d.beacon_enabled,
+      d.beacon_interval_min,
+      d.beacon_distance_km,
+      d.beacon_mode,
+      d.beacon_batch_size,
+      d.beacon_batch_max_wait_min,
+      d.beacon_normal_send_min
     FROM users u
     INNER JOIN devices d ON d.user_id = u.id
     WHERE u.username = $1 AND d.device_label = $2
@@ -90,5 +97,81 @@ module.exports = {
   getAllowedChannelsForUser,
   canAccessChannel,
   getVisibleChannels,
-  canEmergencyOverride
+  canEmergencyOverride,
+  async getDeviceBeaconSetting(deviceDbId) {
+    const { rows } = await pool.query(
+      `
+      SELECT beacon_enabled, beacon_interval_min, beacon_distance_km
+      , beacon_mode, beacon_batch_size, beacon_batch_max_wait_min, beacon_normal_send_min
+      FROM devices
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [deviceDbId]
+    );
+    if (!rows[0]) return null;
+    return {
+      enabled: Boolean(rows[0].beacon_enabled),
+      intervalMin: Number(rows[0].beacon_interval_min) || 15,
+      distanceKm: Number(rows[0].beacon_distance_km) || 1,
+      mode: rows[0].beacon_mode === "eco" ? "eco" : "normal",
+      batchSize: Number(rows[0].beacon_batch_size) || 50,
+      batchMaxWaitMin: Number(rows[0].beacon_batch_max_wait_min) || 120,
+      normalSendMin: Number(rows[0].beacon_normal_send_min) || 60
+    };
+  },
+  async updateDeviceBeaconSetting(deviceLabel, input) {
+    const enabled = Boolean(input.enabled);
+    const intervalMin = Math.max(1, Math.min(120, Number(input.intervalMin) || 15));
+    const distanceKm = Math.max(0.1, Math.min(50, Number(input.distanceKm) || 1));
+    const mode = input.mode === "eco" ? "eco" : "normal";
+    const batchSize = Math.max(10, Math.min(500, Number(input.batchSize) || 50));
+    const batchMaxWaitMin = Math.max(10, Math.min(720, Number(input.batchMaxWaitMin) || 120));
+    const normalSendMin = Math.max(5, Math.min(240, Number(input.normalSendMin) || 60));
+    const { rows } = await pool.query(
+      `
+      UPDATE devices
+      SET beacon_enabled = $2, beacon_interval_min = $3, beacon_distance_km = $4,
+          beacon_mode = $5, beacon_batch_size = $6, beacon_batch_max_wait_min = $7, beacon_normal_send_min = $8
+      WHERE device_label = $1
+      RETURNING device_label, beacon_enabled, beacon_interval_min, beacon_distance_km,
+                beacon_mode, beacon_batch_size, beacon_batch_max_wait_min, beacon_normal_send_min
+      `,
+      [deviceLabel, enabled, intervalMin, distanceKm, mode, batchSize, batchMaxWaitMin, normalSendMin]
+    );
+    if (!rows[0]) return null;
+    return {
+      deviceId: rows[0].device_label,
+      enabled: Boolean(rows[0].beacon_enabled),
+      intervalMin: Number(rows[0].beacon_interval_min),
+      distanceKm: Number(rows[0].beacon_distance_km),
+      mode: rows[0].beacon_mode === "eco" ? "eco" : "normal",
+      batchSize: Number(rows[0].beacon_batch_size) || 50,
+      batchMaxWaitMin: Number(rows[0].beacon_batch_max_wait_min) || 120,
+      normalSendMin: Number(rows[0].beacon_normal_send_min) || 60
+    };
+  },
+  async listDevicesForAdmin() {
+    const { rows } = await pool.query(
+      `
+      SELECT d.device_label, u.username, d.platform, d.beacon_enabled, d.beacon_interval_min, d.beacon_distance_km,
+             d.beacon_mode, d.beacon_batch_size, d.beacon_batch_max_wait_min, d.beacon_normal_send_min
+      FROM devices d
+      INNER JOIN users u ON u.id = d.user_id
+      ORDER BY u.username ASC, d.device_label ASC
+      `
+    );
+    return rows.map((r) => ({
+      deviceId: r.device_label,
+      userId: r.username,
+      platform: r.platform,
+      beaconEnabled: Boolean(r.beacon_enabled),
+      beaconIntervalMin: Number(r.beacon_interval_min) || 15,
+      beaconDistanceKm: Number(r.beacon_distance_km) || 1,
+      beaconMode: r.beacon_mode === "eco" ? "eco" : "normal",
+      beaconBatchSize: Number(r.beacon_batch_size) || 50,
+      beaconBatchMaxWaitMin: Number(r.beacon_batch_max_wait_min) || 120,
+      beaconNormalSendMin: Number(r.beacon_normal_send_min) || 60
+    }));
+  }
 };

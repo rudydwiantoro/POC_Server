@@ -236,6 +236,37 @@
           <button id="btnSaveUserPerm">Save User Permission</button>
           <div class="small">`inherit` = follow role permission.</div>
         </div>
+        <div class="box" id="beaconAdminBox">
+          <div class="meta"><b>Device Beacon Setup</b></div>
+          <label for="beaconDeviceSelect">Device</label>
+          <select id="beaconDeviceSelect"></select>
+          <label><input id="beaconEnabled" type="checkbox" /> Beacon Enabled</label>
+          <label for="beaconInterval">Interval (minutes)</label>
+          <input id="beaconInterval" type="number" min="1" max="120" value="15" />
+          <label for="beaconDistance">Distance (km)</label>
+          <input id="beaconDistance" type="number" min="0.1" step="0.1" value="1" />
+          <label for="beaconMode">Mode</label>
+          <select id="beaconMode">
+            <option value="normal">normal</option>
+            <option value="eco">eco</option>
+          </select>
+          <label for="beaconBatchSize">Eco Batch Size (points)</label>
+          <input id="beaconBatchSize" type="number" min="10" max="500" value="50" />
+          <label for="beaconBatchWait">Eco Max Wait (minutes)</label>
+          <input id="beaconBatchWait" type="number" min="10" max="720" value="120" />
+          <label for="beaconNormalSend">Normal Send Every (minutes)</label>
+          <input id="beaconNormalSend" type="number" min="5" max="240" value="60" />
+          <button id="btnSaveBeaconSetting">Save Beacon Setting</button>
+        </div>
+        <div class="box">
+          <div class="meta"><b>Device Route</b></div>
+          <div class="small">Pilih staff dulu, lalu tampilkan rute.</div>
+          <label for="routeFrom">From</label>
+          <input id="routeFrom" type="datetime-local" />
+          <label for="routeTo">To</label>
+          <input id="routeTo" type="datetime-local" />
+          <button id="btnShowRoute">Show Route</button>
+        </div>
         <div class="box">
           <div class="meta"><b>Guide & Device Setting</b></div>
           <div class="small">
@@ -279,6 +310,8 @@
       let userPermState = { menuKeys: [], users: [] };
       let selectedStaff = null;
       let autoServerConfig = null;
+      let routeLayer = null;
+      let deviceBeaconCache = [];
 
       function setText(id, text) {
         document.getElementById(id).textContent = text;
@@ -354,12 +387,16 @@
         if (permissions.role_permission_admin || permissions.user_permission_admin) {
           await loadPermissionAdminData();
         }
+        if (permissions.emergency_override) {
+          await loadDeviceBeaconAdmin();
+        }
       }
 
       function applyMenuVisibility() {
         document.getElementById("geofenceAdminBox").style.display = permissions.geofence_admin ? "block" : "none";
         document.getElementById("rolePermBox").style.display = permissions.role_permission_admin ? "block" : "none";
         document.getElementById("userPermBox").style.display = permissions.user_permission_admin ? "block" : "none";
+        document.getElementById("beaconAdminBox").style.display = permissions.emergency_override ? "block" : "none";
       }
 
       async function loadPermissionAdminData() {
@@ -481,6 +518,7 @@
               <div class="meta">Last GPS: ${s.lastKnownLocation ? fmtTime(s.lastKnownLocation.recordedAt) : "No data"}</div>
               <div class="meta">Last PTT: ${s.lastPtt ? `${s.lastPtt.channelId} @ ${fmtTime(s.lastPtt.startedAt)}` : "No data"}</div>
               <div class="meta">Image: ${s.lastImageAt ? `📷 ${fmtTime(s.lastImageAt)}` : "-"}</div>
+              <button class="route-btn" data-user="${s.userId}" style="margin-top:6px;background:#2a9fff;color:#001a2a;">🧭 Route</button>
               <span class="badge ${stale ? "warn" : ""}">${stale ? "stale/offline" : "active"}</span>
             `;
             el.onclick = () => {
@@ -490,6 +528,22 @@
               focusStaff(s.userId);
               loadSelectedUserHistory(s.userId);
             };
+            const routeBtn = el.querySelector(".route-btn");
+            if (routeBtn) {
+              routeBtn.onclick = (ev) => {
+                ev.stopPropagation();
+                selectedUserId = s.userId;
+                selectedStaff = s;
+                if (!document.getElementById("routeFrom").value) {
+                  const start = new Date();
+                  start.setHours(0, 0, 0, 0);
+                  const end = new Date();
+                  document.getElementById("routeFrom").value = start.toISOString().slice(0, 16);
+                  document.getElementById("routeTo").value = end.toISOString().slice(0, 16);
+                }
+                showRouteForSelected().catch((e) => setText("mapInfo", `Load route failed: ${e.message}`));
+              };
+            }
             wrap.appendChild(el);
           });
         }
@@ -685,6 +739,72 @@
           "mapInfo",
           `${staff.displayName} | ${staff.lastPtt ? `CH ${staff.lastPtt.channelId}` : "No PTT"} | GPS ${fmtTime(staff.lastKnownLocation.recordedAt)}`
         );
+      }
+
+      async function loadDeviceBeaconAdmin() {
+        const res = await api("/api/dispatch/admin/devices");
+        deviceBeaconCache = Array.isArray(res.devices) ? res.devices : [];
+        const sel = document.getElementById("beaconDeviceSelect");
+        sel.innerHTML = deviceBeaconCache.map((d) => `<option value="${d.deviceId}">${d.deviceId} (${d.userId})</option>`).join("");
+        onBeaconDeviceSelected();
+      }
+
+      function onBeaconDeviceSelected() {
+        const id = document.getElementById("beaconDeviceSelect").value;
+        const d = deviceBeaconCache.find((x) => x.deviceId === id);
+        if (!d) return;
+        document.getElementById("beaconEnabled").checked = Boolean(d.beaconEnabled);
+        document.getElementById("beaconInterval").value = String(d.beaconIntervalMin || 15);
+        document.getElementById("beaconDistance").value = String(d.beaconDistanceKm || 1);
+        document.getElementById("beaconMode").value = d.beaconMode || "normal";
+        document.getElementById("beaconBatchSize").value = String(d.beaconBatchSize || 50);
+        document.getElementById("beaconBatchWait").value = String(d.beaconBatchMaxWaitMin || 120);
+        document.getElementById("beaconNormalSend").value = String(d.beaconNormalSendMin || 60);
+      }
+
+      async function saveBeaconSetting() {
+        const deviceId = document.getElementById("beaconDeviceSelect").value;
+        await api(`/api/dispatch/admin/devices/${encodeURIComponent(deviceId)}/beacon`, {
+          method: "PUT",
+          body: JSON.stringify({
+            enabled: document.getElementById("beaconEnabled").checked,
+            intervalMin: Number(document.getElementById("beaconInterval").value) || 15,
+            distanceKm: Number(document.getElementById("beaconDistance").value) || 1,
+            mode: document.getElementById("beaconMode").value,
+            batchSize: Number(document.getElementById("beaconBatchSize").value) || 50,
+            batchMaxWaitMin: Number(document.getElementById("beaconBatchWait").value) || 120,
+            normalSendMin: Number(document.getElementById("beaconNormalSend").value) || 60
+          })
+        });
+        await loadDeviceBeaconAdmin();
+        setText("mapInfo", `Beacon setting saved: ${deviceId}`);
+      }
+
+      async function showRouteForSelected() {
+        if (!selectedStaff) {
+          setText("mapInfo", "Pilih staff dulu.");
+          return;
+        }
+        const fromRaw = document.getElementById("routeFrom").value;
+        const toRaw = document.getElementById("routeTo").value;
+        const qs = new URLSearchParams();
+        qs.set("deviceId", selectedStaff.deviceId);
+        qs.set("limit", "3000");
+        if (fromRaw) qs.set("from", new Date(fromRaw).toISOString());
+        if (toRaw) qs.set("to", new Date(toRaw).toISOString());
+        const data = await api(`/api/dispatch/tracking/route?${qs.toString()}`);
+        const pts = Array.isArray(data.points) ? data.points : [];
+        if (routeLayer) {
+          map.removeLayer(routeLayer);
+          routeLayer = null;
+        }
+        if (!pts.length) {
+          setText("mapInfo", "Route kosong untuk range ini.");
+          return;
+        }
+        routeLayer = L.polyline(pts.map((p) => [p.lat, p.lon]), { color: "#ffde59", weight: 4, opacity: 0.8 }).addTo(map);
+        map.fitBounds(routeLayer.getBounds(), { padding: [20, 20] });
+        setText("mapInfo", `Route ${selectedStaff.deviceId}: ${pts.length} titik`);
       }
 
       async function refreshTracking() {
@@ -935,6 +1055,13 @@
       };
       document.getElementById("btnCopyConfigJson").onclick = () => {
         copyText(autoServerConfig ? JSON.stringify(autoServerConfig, null, 2) : "", "Config JSON");
+      };
+      document.getElementById("beaconDeviceSelect").onchange = onBeaconDeviceSelected;
+      document.getElementById("btnSaveBeaconSetting").onclick = () => {
+        saveBeaconSetting().catch((e) => setText("mapInfo", `Save beacon failed: ${e.message}`));
+      };
+      document.getElementById("btnShowRoute").onclick = () => {
+        showRouteForSelected().catch((e) => setText("mapInfo", `Load route failed: ${e.message}`));
       };
     </script>
   </body>

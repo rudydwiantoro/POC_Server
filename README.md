@@ -59,6 +59,7 @@ Health:
 Auth:
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
+- `POST /api/auth/activation/check`
 
 Channels/PTT:
 - `GET /api/channels`
@@ -147,7 +148,12 @@ npm run seed-db
 
 ## License Key
 - License di-set dari admin panel (dispatcher), bukan dari mobile.
-- Validasi key menggunakan signature HMAC dengan 3 parameter unik dari env:
+- License key **digenerate dari aplikasi terpisah** (external license generator), bukan di server PoC ini.
+- Server PoC hanya melakukan verifikasi/dekripsi signature lalu menyimpan key yang valid.
+- Rekomendasi validasi key menggunakan:
+  - `LICENSE_SECRET_KEY` (secret utama untuk HMAC)
+  - `LICENSE_CLIENT_KEY` (identitas client/customer)
+- Kompatibilitas legacy masih didukung dengan kombinasi:
   - `LICENSE_PARAM_A`
   - `LICENSE_PARAM_B`
   - `LICENSE_PARAM_C`
@@ -158,11 +164,22 @@ npm run seed-db
   - `maxDevices`
   - `maxOnlineDevices`
   - `expiresAt`
+  - `clientKey`
 
-Generate key (offline/admin side):
+## Mobile Activation Flow
+- Mobile tidak perlu input/decrypt license key.
+- Device cukup validasi ke server saat aktivasi/login:
+  - `POST /api/auth/activation/check`
+- Login hanya diizinkan untuk kombinasi `userId + deviceId` yang sudah terdaftar di server.
+- Jika device belum terdaftar, server akan balas `device_not_activated_on_server`.
+
+External generator tersedia di:
+- CLI: `tools/license-generator/generate-license.js`
+- Panel HTML: `tools/license-generator/license-generator.html`
+
+Contoh generate (external app / machine admin):
 ```bash
-cd backend
-npm run gen-license -- --company=MyCo --server=MyServer --maxServers=1 --maxDevices=300 --maxOnline=120 --expiresAt=2030-12-31T23:59:59Z
+node tools/license-generator/generate-license.js --company=MyCo --server=MyServer --maxServers=1 --maxDevices=300 --maxOnline=120 --expiresAt=2030-12-31T23:59:59Z --secretKey=YOUR_SECRET --clientKey=CLIENT_A
 ```
 
 ## Operation Manual

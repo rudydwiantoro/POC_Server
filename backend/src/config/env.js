@@ -9,6 +9,8 @@ module.exports = {
   companyName: process.env.COMPANY_NAME || "Unlicensed Company",
   serverName: process.env.SERVER_NAME || "PoC Server",
   serverInstanceCount: Number(process.env.SERVER_INSTANCE_COUNT || 1),
+  licenseSecretKey: process.env.LICENSE_SECRET_KEY || "",
+  licenseClientKey: process.env.LICENSE_CLIENT_KEY || "",
   licenseParamA: process.env.LICENSE_PARAM_A || "A",
   licenseParamB: process.env.LICENSE_PARAM_B || "B",
   licenseParamC: process.env.LICENSE_PARAM_C || "C",

@@ -15,6 +15,10 @@ class ApiClient(
     private val baseUrl: String,
     private val httpClient: OkHttpClient = OkHttpClient()
 ) {
+    data class ActivationCheckResult(
+        val activated: Boolean,
+        val reason: String
+    )
     data class LoginResult(
         val accessToken: String,
         val role: String,
@@ -179,6 +183,26 @@ class ApiClient(
     fun openImageInBrowser(context: Context, imageUrl: String) {
         val u = if (imageUrl.startsWith("http")) imageUrl else "${baseUrl.removeSuffix("/")}$imageUrl"
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+    }
+
+    fun checkActivation(userId: String, deviceId: String): Result<ActivationCheckResult> = runCatching {
+        val payload = JSONObject()
+            .put("userId", userId)
+            .put("deviceId", deviceId)
+            .toString()
+        val req = Request.Builder()
+            .url("$baseUrl/api/auth/activation/check")
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+        httpClient.newCall(req).execute().use { resp ->
+            val body = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) error("Activation check failed (${resp.code}): $body")
+            val root = JSONObject(body)
+            ActivationCheckResult(
+                activated = root.optBoolean("activated", false),
+                reason = root.optString("reason", "unknown")
+            )
+        }
     }
 
     fun getAbout(accessToken: String): Result<AboutInfo> = runCatching {

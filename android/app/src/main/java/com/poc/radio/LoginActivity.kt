@@ -43,10 +43,20 @@ class LoginActivity : AppCompatActivity() {
 
             thread {
                 val api = ApiClient(AppConfig.httpBaseUrl(this))
-                val result = api.login(userId, deviceId)
+                val activation = api.checkActivation(userId, deviceId)
+                val loginResult = activation.fold(
+                    onSuccess = { act ->
+                        if (!act.activated) {
+                            Result.failure(IllegalStateException("aktivasi gagal (${act.reason})"))
+                        } else {
+                            api.login(userId, deviceId)
+                        }
+                    },
+                    onFailure = { Result.failure(it) }
+                )
                 runOnUiThread {
                     btnLogin.isEnabled = true
-                    result.onSuccess {
+                    loginResult.onSuccess {
                         AppConfig.saveSession(
                             this,
                             token = it.accessToken,
@@ -63,6 +73,7 @@ class LoginActivity : AppCompatActivity() {
                         tvStatus.text = "Status: login success (${it.role})"
                         startActivity(Intent(this, MainActivity::class.java))
                     }.onFailure { err ->
+                        btnLogin.isEnabled = true
                         tvStatus.text = "Status: ${err.message}"
                     }
                 }

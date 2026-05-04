@@ -1,6 +1,6 @@
 const express = require("express");
 const { issueAccessToken, issueRefreshToken, verifyToken } = require("../services/tokenService");
-const { getAllowedChannelsForUser, getOrCreateUserWithDevice } = require("../services/accessService");
+const { getAllowedChannelsForUser, getUserWithDevice } = require("../services/accessService");
 const { getLicenseStatus } = require("../services/licenseService");
 const { pool } = require("../db/pool");
 
@@ -13,9 +13,9 @@ router.post("/login", async (req, res) => {
   }
 
   try {
-    const account = await getOrCreateUserWithDevice(userId, deviceId, "android");
+    const account = await getUserWithDevice(userId, deviceId);
     if (!account) {
-      return res.status(401).json({ error: "invalid userId/deviceId" });
+      return res.status(403).json({ error: "device_not_activated_on_server" });
     }
     const lic = await getLicenseStatus();
     if (!lic.active && account.role !== "dispatcher") {
@@ -61,6 +61,32 @@ router.post("/login", async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ error: "login failed" });
+  }
+});
+
+router.post("/activation/check", async (req, res) => {
+  const { userId, deviceId } = req.body || {};
+  if (!userId || !deviceId) {
+    return res.status(400).json({ error: "userId and deviceId are required" });
+  }
+  try {
+    const account = await getUserWithDevice(userId, deviceId);
+    if (!account) {
+      return res.json({ activated: false, reason: "device_not_activated_on_server" });
+    }
+    const lic = await getLicenseStatus();
+    if (!lic.active && account.role !== "dispatcher") {
+      return res.json({ activated: false, reason: lic.reason || "license_inactive" });
+    }
+    return res.json({
+      activated: true,
+      reason: "ok",
+      userId: account.username,
+      deviceId: account.device_label,
+      role: account.role
+    });
+  } catch (_error) {
+    return res.status(500).json({ error: "activation_check_failed" });
   }
 });
 

@@ -1,10 +1,24 @@
 const crypto = require("crypto");
 const { pool } = require("../db/pool");
-const { companyName, serverName, serverInstanceCount, licenseParamA, licenseParamB, licenseParamC } = require("../config/env");
+const {
+  companyName,
+  serverName,
+  serverInstanceCount,
+  licenseSecretKey,
+  licenseClientKey,
+  licenseParamA,
+  licenseParamB,
+  licenseParamC
+} = require("../config/env");
+
+function getLicenseSecret() {
+  if (licenseSecretKey) return String(licenseSecretKey);
+  return `${licenseParamA}|${licenseParamB}|${licenseParamC}`;
+}
 
 function signPayload(payloadObj) {
   const payload = Buffer.from(JSON.stringify(payloadObj)).toString("base64url");
-  const secret = `${licenseParamA}|${licenseParamB}|${licenseParamC}`;
+  const secret = getLicenseSecret();
   const sig = crypto.createHmac("sha256", secret).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
@@ -13,7 +27,7 @@ function verifyLicenseKey(licenseKey) {
   const parts = String(licenseKey || "").split(".");
   if (parts.length !== 2) throw new Error("invalid_license_format");
   const [payloadB64, sig] = parts;
-  const secret = `${licenseParamA}|${licenseParamB}|${licenseParamC}`;
+  const secret = getLicenseSecret();
   const expected = crypto.createHmac("sha256", secret).update(payloadB64).digest("base64url");
   if (sig !== expected) throw new Error("invalid_license_signature");
   const parsed = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8"));
@@ -30,6 +44,9 @@ async function setLicenseKey(licenseKey) {
   if (!l.companyName || !l.serverName || !l.expiresAt) throw new Error("invalid_license_payload");
   if (String(l.companyName) !== String(companyName)) throw new Error("license_company_mismatch");
   if (String(l.serverName) !== String(serverName)) throw new Error("license_server_mismatch");
+  if (licenseClientKey && String(l.clientKey || "") !== String(licenseClientKey)) {
+    throw new Error("license_client_key_mismatch");
+  }
   if (Number(serverInstanceCount) > Number(l.maxServers || 0)) throw new Error("license_max_servers_exceeded");
   const exp = new Date(l.expiresAt);
   if (Number.isNaN(exp.getTime())) throw new Error("invalid_license_expiry");

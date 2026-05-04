@@ -47,6 +47,24 @@
         letter-spacing: 0.7px;
         text-transform: uppercase;
       }
+      .top-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .icon-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(19, 41, 58, 0.7);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+        margin: 0;
+        padding: 0;
+      }
       .meta { color: var(--muted); font-size: 12px; }
       .layout {
         display: grid;
@@ -167,7 +185,10 @@
     </div>
     <div class="top">
       <h1>Dispatcher Tracking Console</h1>
-      <div class="meta">Desktop Browser Only - Live staff map from GPS + PTT activity</div>
+      <div class="top-right">
+        <div class="meta">Desktop Browser Only - Live staff map from GPS + PTT activity</div>
+        <button id="btnAboutDispatcher" class="icon-btn" title="About License">i</button>
+      </div>
     </div>
     <div class="layout">
       <aside class="panel">
@@ -391,19 +412,33 @@
         const data = await api("/api/dispatch/menu-permissions/me");
         permissions = data.permissions || {};
         applyMenuVisibility();
+        await loadLicenseInfo();
         if (permissions.role_permission_admin || permissions.user_permission_admin) {
           await loadPermissionAdminData();
         }
         if (permissions.emergency_override) {
           await loadDeviceBeaconAdmin();
-          await loadLicenseInfo();
         }
       }
 
       async function loadLicenseInfo() {
-        const data = await api("/api/dispatch/admin/license");
+        const data = await api("/api/dispatch/about");
         const txt = `Company: ${data.companyName || "-"} | Server: ${data.serverName || "-"} | Exp: ${data.expiresAt || "-"} | Active: ${data.active ? "yes" : "no"}`;
         document.getElementById("aboutInfo").textContent = txt;
+      }
+
+      async function showDispatcherAbout() {
+        const data = await api("/api/dispatch/about");
+        const expText = data.expiresAt ? fmtTime(data.expiresAt) : "-";
+        const activeText = data.active ? "Active" : "Inactive";
+        window.alert(
+          `Company: ${data.companyName || "-"}\n` +
+          `Server: ${data.serverName || "-"}\n` +
+          `Device: ${data.deviceId || "-"}\n` +
+          `User: ${data.userId || "-"}\n` +
+          `License: ${activeText}\n` +
+          `Expiry: ${expText}`
+        );
       }
 
       function applyMenuVisibility() {
@@ -1085,6 +1120,13 @@
           setText("mapInfo", "License key saved.");
         } catch (e) {
           setText("mapInfo", `Save license failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnAboutDispatcher").onclick = async () => {
+        try {
+          await showDispatcherAbout();
+        } catch (e) {
+          setText("mapInfo", `Load about failed: ${e.message}`);
         }
       };
       document.getElementById("beaconDeviceSelect").onchange = onBeaconDeviceSelected;

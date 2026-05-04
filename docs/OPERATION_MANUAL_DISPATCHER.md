@@ -34,6 +34,10 @@ Langkah cepat:
 4. Paste URL hasil copy, lalu `Save`.
 5. Kembali ke login app dan masuk dengan `User ID` + `Device ID`.
 
+Alternatif onboarding cepat:
+- Scan QR `autoconfig` yang muncul di panel (mengarahkan ke config URL server).
+- Atau copy `Config URL` / `Config JSON` dari panel guide.
+
 ## 3. Membaca Tampilan
 Panel kiri:
 - filter channel,

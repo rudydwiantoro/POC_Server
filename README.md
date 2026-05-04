@@ -88,6 +88,27 @@ Dispatch:
 
 Public config:
 - `GET /api/public/server-config` (untuk auto-fetch HTTP Base URL + WS URL dari APK/dispatcher guide)
+- `GET /.well-known/poc-radio-server-config.json` (config URL standar yang bisa di-scan/copy untuk onboarding device)
+
+## VPS Setup Untuk AutoConfig
+Supaya fitur autoconfig berjalan di HP user:
+1. Pastikan domain publik aktif (contoh `https://radio.company.com`).
+2. Aktifkan HTTPS (Let's Encrypt) di reverse proxy.
+3. Set env backend:
+```env
+PUBLIC_BASE_URL=https://radio.company.com
+```
+4. Restart backend (`pm2 restart pocserver` atau setara).
+5. Pastikan endpoint berikut bisa diakses dari internet:
+- `https://radio.company.com/api/public/server-config`
+- `https://radio.company.com/.well-known/poc-radio-server-config.json`
+6. Cek output `wsUrl` harus `wss://.../ws/signaling` (bukan `ws://`) saat pakai HTTPS.
+
+Verifikasi cepat:
+```bash
+curl https://radio.company.com/api/public/server-config
+curl https://radio.company.com/.well-known/poc-radio-server-config.json
+```
 
 ## DB Notes
 Additional tables:

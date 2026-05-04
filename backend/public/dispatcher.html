@@ -246,8 +246,14 @@
           </div>
           <button id="btnLoadServerConfig">Get Server Setting Otomatis</button>
           <div id="serverConfigInfo" class="small">Server config belum dimuat.</div>
+          <div class="small">Config URL: <span id="serverConfigUrl">-</span></div>
+          <div id="serverConfigQrWrap" class="small" style="margin-top:8px;">
+            QR autoconfig belum dimuat.
+          </div>
           <button id="btnCopyHttp">Copy HTTP Base URL</button>
           <button id="btnCopyWs">Copy WS URL</button>
+          <button id="btnCopyConfigUrl">Copy Config URL</button>
+          <button id="btnCopyConfigJson">Copy Config JSON</button>
         </div>
       </aside>
     </div>
@@ -308,6 +314,14 @@
         autoServerConfig = data;
         const node = document.getElementById("serverConfigInfo");
         node.textContent = `HTTP: ${data.httpBaseUrl} | WS: ${data.wsUrl}`;
+        const configUrl = `${location.origin}/.well-known/poc-radio-server-config.json`;
+        document.getElementById("serverConfigUrl").textContent = configUrl;
+        const qrWrap = document.getElementById("serverConfigQrWrap");
+        const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(configUrl)}`;
+        qrWrap.innerHTML = `
+          <div>Scan QR dari HP untuk buka config URL:</div>
+          <img src="${qrImgUrl}" alt="Autoconfig QR" style="margin-top:6px;width:180px;height:180px;border:1px solid #2a4960;border-radius:8px;" />
+        `;
       }
 
       async function copyText(value, label) {
@@ -905,6 +919,12 @@
       };
       document.getElementById("btnCopyWs").onclick = () => {
         copyText(autoServerConfig ? autoServerConfig.wsUrl : "", "WS URL");
+      };
+      document.getElementById("btnCopyConfigUrl").onclick = () => {
+        copyText(`${location.origin}/.well-known/poc-radio-server-config.json`, "Config URL");
+      };
+      document.getElementById("btnCopyConfigJson").onclick = () => {
+        copyText(autoServerConfig ? JSON.stringify(autoServerConfig, null, 2) : "", "Config JSON");
       };
     </script>
   </body>

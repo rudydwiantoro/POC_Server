@@ -3,6 +3,8 @@ const { canAccessChannel } = require("../services/accessService");
 const { getActiveHolder, requestTalk, releaseTalk, getPttGpsHistory } = require("../services/pttSessionService");
 const { savePttMessage } = require("../services/pttMessageService");
 const { savePttTextMessage, getLatestPttTextMessage } = require("../services/pttTextService");
+const { savePttImageMessage } = require("../services/pttImageService");
+const { broadcastToChannel } = require("../ws/signalBus");
 
 const router = express.Router();
 
@@ -168,6 +170,41 @@ router.get("/messages/text/latest", async (req, res) => {
     return res.json({ message });
   } catch (_error) {
     return res.status(500).json({ error: "failed to load latest text message" });
+  }
+});
+
+router.post("/messages/image", async (req, res) => {
+  try {
+    const { userId, deviceId, channelId, mimeType, imageBase64, noteText, gps } = req.body || {};
+    if (!userId || !deviceId || !channelId || !mimeType || !imageBase64) {
+      return res.status(400).json({ error: "userId, deviceId, channelId, mimeType, imageBase64 are required" });
+    }
+    if (req.auth.userId !== userId) return res.status(403).json({ error: "token userId mismatch" });
+    if (req.auth.deviceId !== deviceId) return res.status(403).json({ error: "token deviceId mismatch" });
+    const allowed = await canAccessChannel(req.auth.userDbId, req.auth.role, channelId);
+    if (!allowed) return res.status(403).json({ error: "no access to this channel" });
+    const saved = await savePttImageMessage({
+      userDbId: req.auth.userDbId,
+      deviceDbId: req.auth.deviceDbId,
+      channelCode: channelId,
+      mimeType,
+      imageBase64,
+      noteText,
+      gps
+    });
+    broadcastToChannel(channelId, {
+      type: "ptt_image",
+      channelId,
+      userId,
+      imageUrl: saved.imageUrl,
+      noteText: saved.noteText || "",
+      createdAt: new Date().toISOString()
+    });
+    return res.json({ success: true, message: saved });
+  } catch (error) {
+    if (error.message === "channel_not_found") return res.status(404).json({ error: "channel not found" });
+    if (error.message === "note_too_long") return res.status(400).json({ error: "note max length is 160 chars" });
+    return res.status(500).json({ error: "failed to upload image message" });
   }
 });
 

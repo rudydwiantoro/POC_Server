@@ -2,6 +2,7 @@ const WebSocket = require("ws");
 const { getActiveHolder, requestTalk, releaseTalk } = require("../services/pttSessionService");
 const { canAccessChannel, getUserByUsername, getUserWithDevice } = require("../services/accessService");
 const { savePttTextMessage } = require("../services/pttTextService");
+const { registerBroadcaster } = require("./signalBus");
 
 function send(ws, payload) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -187,6 +188,10 @@ function createSignalingServer(httpServer) {
       }
       clients.delete(ws);
     });
+  });
+
+  registerBroadcaster((channelId, payload) => {
+    broadcastToChannel(clients, channelId, payload);
   });
 
   return wss;

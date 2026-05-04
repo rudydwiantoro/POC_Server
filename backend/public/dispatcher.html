@@ -480,6 +480,7 @@
               <div class="meta">Channels: ${(s.channels || []).join(", ") || "-"}</div>
               <div class="meta">Last GPS: ${s.lastKnownLocation ? fmtTime(s.lastKnownLocation.recordedAt) : "No data"}</div>
               <div class="meta">Last PTT: ${s.lastPtt ? `${s.lastPtt.channelId} @ ${fmtTime(s.lastPtt.startedAt)}` : "No data"}</div>
+              <div class="meta">Image: ${s.lastImageAt ? `📷 ${fmtTime(s.lastImageAt)}` : "-"}</div>
               <span class="badge ${stale ? "warn" : ""}">${stale ? "stale/offline" : "active"}</span>
             `;
             el.onclick = () => {
@@ -738,16 +739,25 @@
           if (toRaw) qs.set("to", new Date(toRaw).toISOString());
           const data = await api(`/api/dispatch/staff/${encodeURIComponent(userId)}/messages?${qs.toString()}`);
           const list = Array.isArray(data.messages) ? data.messages : [];
-          if (!list.length) {
-            wrap.textContent = "Belum ada voice history.";
+          const images = Array.isArray(data.images) ? data.images : [];
+          if (!list.length && !images.length) {
+            wrap.textContent = "Belum ada voice/image history.";
             return;
           }
-          wrap.innerHTML = list.map((m) => `
+          const voiceHtml = list.map((m) => `
             <div style="border:1px solid #2a4960;border-radius:8px;padding:6px;margin-bottom:6px;">
-              <div>${fmtTime(m.createdAt)} | ${m.channelId}</div>
+              <div>VOICE | ${fmtTime(m.createdAt)} | ${m.channelId}</div>
               <audio controls preload="none" src="${m.audioUrl}" style="width:100%;margin-top:4px;"></audio>
             </div>
           `).join("");
+          const imageHtml = images.map((m) => `
+            <div style="border:1px solid #2a4960;border-radius:8px;padding:6px;margin-bottom:6px;">
+              <div>IMAGE 📷 | ${fmtTime(m.createdAt)} | ${m.channelId}</div>
+              <div class="meta">${m.noteText || "-"}</div>
+              <button onclick="window.open('${m.imageUrl}','_blank')" style="margin-top:4px;">Preview Image</button>
+            </div>
+          `).join("");
+          wrap.innerHTML = voiceHtml + imageHtml;
         } catch (e) {
           wrap.textContent = `Gagal load history: ${e.message}`;
         }

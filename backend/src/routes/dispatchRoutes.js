@@ -2,6 +2,7 @@ const express = require("express");
 const { canEmergencyOverride, getVisibleChannels } = require("../services/accessService");
 const { pool } = require("../db/pool");
 const { getUserPttMessages } = require("../services/pttMessageService");
+const { getUserPttImages } = require("../services/pttImageService");
 
 const router = express.Router();
 const MENU_KEYS = [
@@ -75,6 +76,13 @@ router.get("/tracking/overview", async (req, res) => {
         FROM ptt_sessions ps
         INNER JOIN channels c ON c.id = ps.channel_id
         ORDER BY ps.speaker_user_id, ps.started_at DESC
+      ),
+      latest_image AS (
+        SELECT DISTINCT ON (pim.speaker_user_id)
+          pim.speaker_user_id,
+          pim.created_at AS last_image_at
+        FROM ptt_image_messages pim
+        ORDER BY pim.speaker_user_id, pim.created_at DESC
       )
       SELECT
         u.username AS user_id,
@@ -88,12 +96,14 @@ router.get("/tracking/overview", async (req, res) => {
         ll.recorded_at,
         lp.channel_id,
         lp.started_at AS last_ptt_started_at,
-        lp.ended_at AS last_ptt_ended_at
+        lp.ended_at AS last_ptt_ended_at,
+        li.last_image_at
       FROM users u
       INNER JOIN devices d ON d.user_id = u.id
       LEFT JOIN user_channels uc ON uc.user_id = u.id
       LEFT JOIN latest_location ll ON ll.device_id = d.id
       LEFT JOIN latest_ptt lp ON lp.speaker_user_id = u.id
+      LEFT JOIN latest_image li ON li.speaker_user_id = u.id
       WHERE u.id IN (
         SELECT DISTINCT cm.user_id
         FROM channel_members cm
@@ -124,7 +134,8 @@ router.get("/tracking/overview", async (req, res) => {
             startedAt: r.last_ptt_started_at,
             endedAt: r.last_ptt_ended_at
           }
-        : null
+        : null,
+      lastImageAt: r.last_image_at || null
     }));
 
     return res.json({ generatedAt: new Date().toISOString(), staff });
@@ -366,7 +377,13 @@ router.get("/staff/:userId/messages", async (req, res) => {
       from,
       to
     });
-    return res.json({ count: messages.length, messages });
+    const images = await getUserPttImages({
+      username: userId,
+      limit,
+      channelCodes,
+      channelId
+    });
+    return res.json({ count: messages.length + images.length, messages, images });
   } catch (_error) {
     return res.status(500).json({ error: "failed to load staff message history" });
   }

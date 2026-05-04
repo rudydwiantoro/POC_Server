@@ -16,6 +16,8 @@ npm install
 cp .env.example .env
 ```
 4. Isi koneksi DB di `.env` (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`).
+5. Opsional untuk auto device setting (APK):
+- set `PUBLIC_BASE_URL=https://your-domain.com` di `.env` jika domain publik berbeda dari host request.
 5. Init schema + seed:
 ```bash
 npm run init-db
@@ -51,6 +53,7 @@ Health:
 - geofence editor (drag center + radius + save)
 - geofence out-of-area alert + sound
 - role/user menu permission setup
+- staff action panel: click user/marker -> `Talk` + last voice message history (playback)
 
 ## API Summary
 Auth:
@@ -63,6 +66,7 @@ Channels/PTT:
 - `POST /api/ptt/floor/release`
 - `GET /api/ptt/floor/state/:channelId`
 - `GET /api/ptt/floor/gps/history?channelId=<id>&limit=<n>`
+- `POST /api/ptt/floor/messages/upload`
 
 Location:
 - `POST /api/location/update`
@@ -79,12 +83,39 @@ Dispatch:
 - `GET /api/dispatch/admin/menu-permissions/users`
 - `PUT /api/dispatch/admin/menu-permissions/users/:userId`
 - `POST /api/dispatch/emergency/override`
+- `GET /api/dispatch/staff/:userId/messages?limit=<n>`
+- `GET /api/dispatch/staff/:userId/messages?limit=<n>&channelId=<id>&from=<iso>&to=<iso>`
+
+Public config:
+- `GET /api/public/server-config` (untuk auto-fetch HTTP Base URL + WS URL dari APK/dispatcher guide)
+- `GET /.well-known/poc-radio-server-config.json` (config URL standar yang bisa di-scan/copy untuk onboarding device)
+
+## VPS Setup Untuk AutoConfig
+Supaya fitur autoconfig berjalan di HP user:
+1. Pastikan domain publik aktif (contoh `https://radio.company.com`).
+2. Aktifkan HTTPS (Let's Encrypt) di reverse proxy.
+3. Set env backend:
+```env
+PUBLIC_BASE_URL=https://radio.company.com
+```
+4. Restart backend (`pm2 restart pocserver` atau setara).
+5. Pastikan endpoint berikut bisa diakses dari internet:
+- `https://radio.company.com/api/public/server-config`
+- `https://radio.company.com/.well-known/poc-radio-server-config.json`
+6. Cek output `wsUrl` harus `wss://.../ws/signaling` (bukan `ws://`) saat pakai HTTPS.
+
+Verifikasi cepat:
+```bash
+curl https://radio.company.com/api/public/server-config
+curl https://radio.company.com/.well-known/poc-radio-server-config.json
+```
 
 ## DB Notes
 Additional tables:
 - `geofences`
 - `role_menu_permissions`
 - `user_menu_permissions`
+- `ptt_messages`
 
 Jika upgrade dari schema lama:
 ```bash

@@ -1,6 +1,7 @@
 const express = require("express");
 const { canAccessChannel } = require("../services/accessService");
 const { getActiveHolder, requestTalk, releaseTalk, getPttGpsHistory } = require("../services/pttSessionService");
+const { savePttMessage } = require("../services/pttMessageService");
 
 const router = express.Router();
 
@@ -86,6 +87,39 @@ router.get("/gps/history", async (req, res) => {
     return res.json({ count: sessions.length, sessions });
   } catch (_error) {
     return res.status(500).json({ error: "failed to load gps history" });
+  }
+});
+
+router.post("/messages/upload", async (req, res) => {
+  try {
+    const { userId, deviceId, channelId, mimeType, audioBase64, durationMs } = req.body || {};
+    if (!userId || !deviceId || !channelId || !mimeType || !audioBase64) {
+      return res.status(400).json({ error: "userId, deviceId, channelId, mimeType, audioBase64 are required" });
+    }
+    if (req.auth.userId !== userId) {
+      return res.status(403).json({ error: "token userId does not match request userId" });
+    }
+    if (req.auth.deviceId !== deviceId) {
+      return res.status(403).json({ error: "token deviceId does not match request deviceId" });
+    }
+    const allowed = await canAccessChannel(req.auth.userDbId, req.auth.role, channelId);
+    if (!allowed) {
+      return res.status(403).json({ error: "no access to this channel" });
+    }
+    const saved = await savePttMessage({
+      userDbId: req.auth.userDbId,
+      deviceDbId: req.auth.deviceDbId,
+      channelCode: channelId,
+      mimeType,
+      audioBase64,
+      durationMs: typeof durationMs === "number" ? durationMs : null
+    });
+    return res.json({ success: true, message: saved });
+  } catch (error) {
+    if (error.message === "channel_not_found") {
+      return res.status(404).json({ error: "channel not found" });
+    }
+    return res.status(500).json({ error: "failed to upload ptt message" });
   }
 });
 

@@ -111,7 +111,10 @@
         compressor: null,
         drive: null,
         makeup: null,
-        noiseGain: null
+        noiseGain: null,
+        mediaRecorder: null,
+        recordChunks: [],
+        recordStartedAt: null
       };
 
       const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
@@ -241,6 +244,78 @@
           channelId: state.channelId,
           gps: gps || undefined
         });
+      }
+
+      function pickRecorderMimeType() {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) return "audio/webm;codecs=opus";
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) return "audio/ogg;codecs=opus";
+        return "";
+      }
+
+      function startLocalPttRecording() {
+        if (!state.localStream || !window.MediaRecorder) return;
+        if (state.mediaRecorder && state.mediaRecorder.state === "recording") return;
+        const mimeType = pickRecorderMimeType();
+        try {
+          state.recordChunks = [];
+          state.mediaRecorder = mimeType
+            ? new MediaRecorder(state.localStream, { mimeType })
+            : new MediaRecorder(state.localStream);
+          state.recordStartedAt = Date.now();
+          state.mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) state.recordChunks.push(e.data);
+          };
+          state.mediaRecorder.start();
+          log("local ptt recording started");
+        } catch (e) {
+          log("recording start failed", { message: e.message });
+        }
+      }
+
+      async function stopAndUploadLocalPttRecording() {
+        if (!state.mediaRecorder || state.mediaRecorder.state !== "recording") return;
+        const rec = state.mediaRecorder;
+        const durationMs = state.recordStartedAt ? (Date.now() - state.recordStartedAt) : null;
+        await new Promise((resolve) => {
+          rec.onstop = resolve;
+          rec.stop();
+        });
+        const blob = new Blob(state.recordChunks, { type: rec.mimeType || "audio/webm" });
+        state.recordChunks = [];
+        if (!blob.size) return;
+        const base64 = await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => {
+            const s = String(fr.result || "");
+            const idx = s.indexOf(",");
+            resolve(idx >= 0 ? s.slice(idx + 1) : "");
+          };
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+        try {
+          const res = await fetch("/api/ptt/floor/messages/upload", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${state.token}`
+            },
+            body: JSON.stringify({
+              userId: state.userId,
+              deviceId: document.getElementById("deviceId").value.trim(),
+              channelId: state.channelId,
+              mimeType: blob.type || "audio/webm",
+              audioBase64: base64,
+              durationMs
+            })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "upload failed");
+          log("ptt recording uploaded", data.message);
+        } catch (e) {
+          log("ptt upload error", { message: e.message });
+        }
       }
 
       async function login() {
@@ -432,23 +507,28 @@
       };
 
       pttBtn.onmousedown = async () => {
+        startLocalPttRecording();
         await requestTalkWithOptionalGps();
       };
-      pttBtn.onmouseup = () => {
+      pttBtn.onmouseup = async () => {
         if (!state.joined) return;
+        await stopAndUploadLocalPttRecording();
         sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
       };
-      pttBtn.onmouseleave = () => {
+      pttBtn.onmouseleave = async () => {
         if (!state.joined || !state.floorGranted) return;
+        await stopAndUploadLocalPttRecording();
         sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
       };
       pttBtn.ontouchstart = (e) => {
         e.preventDefault();
+        startLocalPttRecording();
         requestTalkWithOptionalGps();
       };
-      pttBtn.ontouchend = (e) => {
+      pttBtn.ontouchend = async (e) => {
         e.preventDefault();
         if (!state.joined) return;
+        await stopAndUploadLocalPttRecording();
         sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
       };
 
@@ -515,6 +595,10 @@
       }
 
       state.debugTimer = setInterval(updateDebug, 400);
+      const params = new URLSearchParams(location.search);
+      if (params.get("userId")) document.getElementById("userId").value = params.get("userId");
+      if (params.get("deviceId")) document.getElementById("deviceId").value = params.get("deviceId");
+      if (params.get("channelId")) document.getElementById("channelId").value = params.get("channelId");
       updateDebug();
     </script>
   </body>

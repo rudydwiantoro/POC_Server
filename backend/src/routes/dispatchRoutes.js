@@ -1,6 +1,7 @@
 const express = require("express");
 const { canEmergencyOverride, getVisibleChannels } = require("../services/accessService");
 const { pool } = require("../db/pool");
+const { getUserPttMessages } = require("../services/pttMessageService");
 
 const router = express.Router();
 const MENU_KEYS = [
@@ -345,6 +346,29 @@ router.put("/geofences", async (req, res) => {
     return res.status(500).json({ error: "failed to save geofences" });
   } finally {
     client.release();
+  }
+});
+
+router.get("/staff/:userId/messages", async (req, res) => {
+  try {
+    const userId = String(req.params.userId || "");
+    const channels = await getVisibleChannels(req.auth.userDbId, req.auth.role);
+    const channelCodes = channels.map((c) => c.id);
+    const limit = req.query.limit ? Number(req.query.limit) : 20;
+    const channelId = req.query.channelId ? String(req.query.channelId) : null;
+    const from = req.query.from ? String(req.query.from) : null;
+    const to = req.query.to ? String(req.query.to) : null;
+    const messages = await getUserPttMessages({
+      username: userId,
+      limit,
+      channelCodes,
+      channelId,
+      from,
+      to
+    });
+    return res.json({ count: messages.length, messages });
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to load staff message history" });
   }
 });
 

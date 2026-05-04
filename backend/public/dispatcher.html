@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dispatcher Tracking Console</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <style>
+      :root {
+        --bg: #071019;
+        --panel: #0f1f2d;
+        --panel-soft: #162d3d;
+        --line: #2a4960;
+        --text: #e6f0f7;
+        --muted: #9bb2c2;
+        --accent: #27c4a8;
+        --warn: #d5aa45;
+        --blue: #29a0ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 6% 0%, rgba(41,160,255,.15) 0%, transparent 30%),
+          radial-gradient(circle at 92% 10%, rgba(39,196,168,.12) 0%, transparent 25%),
+          var(--bg);
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        min-width: 1100px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(90deg, rgba(41,160,255,.15), rgba(39,196,168,.1));
+      }
+      .top h1 {
+        margin: 0;
+        font-size: 19px;
+        letter-spacing: 0.7px;
+        text-transform: uppercase;
+      }
+      .meta { color: var(--muted); font-size: 12px; }
+      .layout {
+        display: grid;
+        grid-template-columns: 350px 1fr 330px;
+        height: calc(100vh - 54px);
+      }
+      .panel {
+        border-right: 1px solid var(--line);
+        background: linear-gradient(180deg, var(--panel), #0c1925);
+        display: flex;
+        flex-direction: column;
+      }
+      .panel-right {
+        border-left: 1px solid var(--line);
+        background: linear-gradient(180deg, #0f2131, #0a1722);
+        overflow: auto;
+      }
+      .box { padding: 12px; border-bottom: 1px solid var(--line); }
+      label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+      input, button {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px;
+        font-size: 13px;
+      }
+      input { background: #0f2230; color: var(--text); }
+      button {
+        margin-top: 8px;
+        background: linear-gradient(90deg, var(--accent), #2ca5c6);
+        color: #032229;
+        font-weight: 700;
+        cursor: pointer;
+        letter-spacing: 0.3px;
+      }
+      .small { font-size: 12px; color: var(--muted); margin-top: 8px; }
+      .staff-list {
+        overflow: auto;
+        padding: 10px;
+      }
+      .staff {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 9px;
+        margin-bottom: 8px;
+        cursor: pointer;
+      }
+      .staff.active { border-color: #53d1b5; box-shadow: 0 0 0 1px #53d1b5 inset; }
+      .staff .name { font-weight: 700; }
+      .staff .meta { margin-top: 3px; }
+      .badge {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #29475c;
+        color: #b8cfdd;
+        font-size: 11px;
+      }
+      .badge.warn { background: #4b3a10; color: #ffdd86; }
+      #map { width: 100%; height: 100%; }
+      .map-wrap { position: relative; }
+      .floating {
+        position: absolute;
+        right: 12px;
+        top: 12px;
+        z-index: 500;
+        background: rgba(7, 18, 27, 0.86);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 9px 11px;
+        font-size: 12px;
+      }
+      .kpis {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .kpi {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: #13293a;
+      }
+      .kpi .v {
+        font-weight: 800;
+        font-size: 18px;
+        margin-top: 2px;
+      }
+      .event-list {
+        padding: 10px;
+      }
+      .event {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #12283a;
+        padding: 8px;
+        margin-bottom: 8px;
+        font-size: 12px;
+      }
+      .offline {
+        color: var(--warn);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <h1>Dispatcher Tracking Console</h1>
+      <div class="meta">Desktop Browser Only - Live staff map from GPS + PTT activity</div>
+    </div>
+    <div class="layout">
+      <aside class="panel">
+        <div class="box">
+          <label for="userId">Dispatcher User ID</label>
+          <input id="userId" value="supervisor" />
+          <label for="deviceId">Dispatcher Device ID</label>
+          <input id="deviceId" value="desk1" />
+          <button id="btnLogin">Login Dispatcher</button>
+          <div class="small" id="loginStatus">Not logged in.</div>
+        </div>
+        <div class="box">
+          <button id="btnRefresh">Refresh Tracking</button>
+          <div class="small" id="lastSync">Last sync: -</div>
+        </div>
+        <div class="staff-list" id="staffList"></div>
+      </aside>
+      <main class="map-wrap">
+        <div id="map"></div>
+        <div class="floating" id="mapInfo">No staff selected.</div>
+      </main>
+      <aside class="panel-right">
+        <div class="box">
+          <div class="kpis">
+            <div class="kpi"><div class="meta">Active Staff</div><div class="v" id="kpiActive">0</div></div>
+            <div class="kpi"><div class="meta">Stale/Offline</div><div class="v" id="kpiOffline">0</div></div>
+            <div class="kpi"><div class="meta">With GPS</div><div class="v" id="kpiGps">0</div></div>
+            <div class="kpi"><div class="meta">Talking Now</div><div class="v" id="kpiTalking">0</div></div>
+          </div>
+        </div>
+        <div class="box">
+          <div class="meta">Recent Operations</div>
+        </div>
+        <div class="event-list" id="eventList"></div>
+      </aside>
+    </div>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script>
+      let accessToken = "";
+      let map = null;
+      let markers = new Map();
+      let selectedUserId = null;
+      let refreshTimer = null;
+      let staffCache = [];
+
+      function setText(id, text) {
+        document.getElementById(id).textContent = text;
+      }
+
+      function fmtTime(iso) {
+        if (!iso) return "-";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return "-";
+        return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+      }
+
+      function minutesSince(iso) {
+        if (!iso) return null;
+        const d = new Date(iso).getTime();
+        if (Number.isNaN(d)) return null;
+        return Math.round((Date.now() - d) / 60000);
+      }
+
+      async function api(path, options = {}) {
+        const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+        const res = await fetch(path, { ...options, headers });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
+        return data;
+      }
+
+      async function login() {
+        const userId = document.getElementById("userId").value.trim();
+        const deviceId = document.getElementById("deviceId").value.trim();
+        const data = await api("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ userId, deviceId })
+        });
+        accessToken = data.accessToken || "";
+        const role = data.user ? data.user.role : "-";
+        setText("loginStatus", `Logged in as ${userId} (${role})`);
+      }
+
+      function ensureMap() {
+        if (map) return;
+        map = L.map("map", { zoomControl: true }).setView([-8.65, 115.22], 12);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(map);
+      }
+
+      function markerColor(staff) {
+        const mins = minutesSince(staff.lastKnownLocation ? staff.lastKnownLocation.recordedAt : null);
+        if (mins == null) return "#8c99a7";
+        if (mins > 30) return "#d0a83b";
+        return "#2ca58d";
+      }
+
+      function makeIcon(color) {
+        return L.divIcon({
+          className: "",
+          html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.25)"></div>`,
+          iconSize: [14, 14],
+          iconAnchor: [7, 7]
+        });
+      }
+
+      function renderList(staff) {
+        const wrap = document.getElementById("staffList");
+        wrap.innerHTML = "";
+        staff.forEach((s) => {
+          const el = document.createElement("div");
+          el.className = `staff${selectedUserId === s.userId ? " active" : ""}`;
+          const mins = minutesSince(s.lastKnownLocation ? s.lastKnownLocation.recordedAt : null);
+          const stale = mins == null || mins > 30;
+          el.innerHTML = `
+            <div class="name">${s.displayName} <span class="meta">(${s.userId})</span></div>
+            <div class="meta">Device: ${s.deviceId} | Role: ${s.role}</div>
+            <div class="meta">Last GPS: ${s.lastKnownLocation ? fmtTime(s.lastKnownLocation.recordedAt) : "No data"}</div>
+            <div class="meta">Last PTT: ${s.lastPtt ? `${s.lastPtt.channelId} @ ${fmtTime(s.lastPtt.startedAt)}` : "No data"}</div>
+            <span class="badge ${stale ? "warn" : ""}">${stale ? "stale/offline" : "active"}</span>
+          `;
+          el.onclick = () => {
+            selectedUserId = s.userId;
+            renderList(staffCache);
+            focusStaff(s.userId);
+          };
+          wrap.appendChild(el);
+        });
+      }
+
+      function updateKpis(staff) {
+        let active = 0;
+        let offline = 0;
+        let withGps = 0;
+        let talking = 0;
+        for (const s of staff) {
+          if (s.lastKnownLocation) withGps += 1;
+          const mins = minutesSince(s.lastKnownLocation ? s.lastKnownLocation.recordedAt : null);
+          if (mins != null && mins <= 30) active += 1;
+          else offline += 1;
+          if (s.lastPtt && !s.lastPtt.endedAt) talking += 1;
+        }
+        setText("kpiActive", String(active));
+        setText("kpiOffline", String(offline));
+        setText("kpiGps", String(withGps));
+        setText("kpiTalking", String(talking));
+      }
+
+      function renderEvents(staff) {
+        const events = [];
+        for (const s of staff) {
+          if (s.lastPtt) {
+            events.push({
+              type: "ptt",
+              at: s.lastPtt.startedAt,
+              text: `${s.displayName} PTT on ${s.lastPtt.channelId}`
+            });
+          }
+          if (s.lastKnownLocation) {
+            events.push({
+              type: "gps",
+              at: s.lastKnownLocation.recordedAt,
+              text: `${s.displayName} GPS update (${s.lastKnownLocation.latitude.toFixed(5)}, ${s.lastKnownLocation.longitude.toFixed(5)})`
+            });
+          }
+        }
+        events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+        const top = events.slice(0, 12);
+        const wrap = document.getElementById("eventList");
+        wrap.innerHTML = "";
+        if (!top.length) {
+          wrap.innerHTML = `<div class="event">No recent events.</div>`;
+          return;
+        }
+        for (const ev of top) {
+          const el = document.createElement("div");
+          el.className = "event";
+          el.innerHTML = `<b>${ev.type.toUpperCase()}</b><br/>${ev.text}<br/><span class="meta">${fmtTime(ev.at)}</span>`;
+          wrap.appendChild(el);
+        }
+      }
+
+      function upsertMarkers(staff) {
+        const activeIds = new Set();
+        for (const s of staff) {
+          if (!s.lastKnownLocation) continue;
+          activeIds.add(s.userId);
+          const latlng = [s.lastKnownLocation.latitude, s.lastKnownLocation.longitude];
+          const title = `${s.displayName} (${s.userId})`;
+          const popup = `
+            <b>${title}</b><br/>
+            Device: ${s.deviceId}<br/>
+            Last GPS: ${fmtTime(s.lastKnownLocation.recordedAt)}<br/>
+            Accuracy: ${s.lastKnownLocation.accuracyM == null ? "-" : `${Math.round(s.lastKnownLocation.accuracyM)} m`}<br/>
+            Last PTT: ${s.lastPtt ? `${s.lastPtt.channelId} @ ${fmtTime(s.lastPtt.startedAt)}` : "-"}
+          `;
+
+          const existing = markers.get(s.userId);
+          if (existing) {
+            existing.setLatLng(latlng);
+            existing.setIcon(makeIcon(markerColor(s)));
+            existing.setPopupContent(popup);
+          } else {
+            const m = L.marker(latlng, { icon: makeIcon(markerColor(s)) }).addTo(map);
+            m.bindPopup(popup);
+            markers.set(s.userId, m);
+          }
+        }
+
+        for (const [userId, marker] of markers.entries()) {
+          if (!activeIds.has(userId)) {
+            map.removeLayer(marker);
+            markers.delete(userId);
+          }
+        }
+      }
+
+      function focusStaff(userId) {
+        const staff = staffCache.find((x) => x.userId === userId);
+        if (!staff || !staff.lastKnownLocation) {
+          setText("mapInfo", "Selected staff has no GPS location yet.");
+          return;
+        }
+        const latlng = [staff.lastKnownLocation.latitude, staff.lastKnownLocation.longitude];
+        map.setView(latlng, 15);
+        const marker = markers.get(userId);
+        if (marker) marker.openPopup();
+        setText(
+          "mapInfo",
+          `${staff.displayName} | ${staff.lastPtt ? `CH ${staff.lastPtt.channelId}` : "No PTT"} | GPS ${fmtTime(staff.lastKnownLocation.recordedAt)}`
+        );
+      }
+
+      async function refreshTracking() {
+        ensureMap();
+        const data = await api("/api/dispatch/tracking/overview");
+        staffCache = Array.isArray(data.staff) ? data.staff : [];
+        renderList(staffCache);
+        updateKpis(staffCache);
+        renderEvents(staffCache);
+        upsertMarkers(staffCache);
+        setText("lastSync", `Last sync: ${fmtTime(data.generatedAt)}`);
+        if (selectedUserId) focusStaff(selectedUserId);
+      }
+
+      document.getElementById("btnLogin").onclick = async () => {
+        try {
+          await login();
+          await refreshTracking();
+          if (refreshTimer) clearInterval(refreshTimer);
+          refreshTimer = setInterval(() => {
+            refreshTracking().catch((e) => setText("mapInfo", `Auto refresh failed: ${e.message}`));
+          }, 15000);
+        } catch (e) {
+          setText("loginStatus", `Login failed: ${e.message}`);
+        }
+      };
+
+      document.getElementById("btnRefresh").onclick = () => {
+        refreshTracking().catch((e) => setText("mapInfo", `Refresh failed: ${e.message}`));
+      };
+    </script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
 const express = require("express");
 const { canAccessChannel } = require("../services/accessService");
-const { getActiveHolder, requestTalk, releaseTalk } = require("../services/pttSessionService");
+const { getActiveHolder, requestTalk, releaseTalk, getPttGpsHistory } = require("../services/pttSessionService");
 
 const router = express.Router();
 
@@ -20,7 +20,9 @@ router.post("/request_talk", async (req, res) => {
 
     const result = await requestTalk(channelId, {
       userId: req.auth.userId,
-      userDbId: req.auth.userDbId
+      userDbId: req.auth.userDbId,
+      deviceDbId: req.auth.deviceDbId,
+      gps: req.body ? req.body.gps : null
     });
     if (!result.ok && result.reason === "channel_not_found") {
       return res.status(404).json({ error: "channel not found" });
@@ -31,7 +33,7 @@ router.post("/request_talk", async (req, res) => {
         holder: result.holder
       });
     }
-    return res.json({ granted: true, holder: result.holder });
+    return res.json({ granted: true, holder: result.holder, gpsSaved: result.gpsSaved || false });
   } catch (_error) {
     return res.status(500).json({ error: "failed to request talk" });
   }
@@ -67,6 +69,23 @@ router.get("/state/:channelId", async (req, res) => {
     return res.json({ holder });
   } catch (_error) {
     return res.status(500).json({ error: "failed to fetch floor state" });
+  }
+});
+
+router.get("/gps/history", async (req, res) => {
+  try {
+    const channelId = req.query.channelId ? String(req.query.channelId) : null;
+    if (channelId) {
+      const allowed = await canAccessChannel(req.auth.userDbId, req.auth.role, channelId);
+      if (!allowed) {
+        return res.status(403).json({ error: "no access to this channel" });
+      }
+    }
+    const limit = req.query.limit ? Number(req.query.limit) : 100;
+    const sessions = await getPttGpsHistory({ channelId, limit });
+    return res.json({ count: sessions.length, sessions });
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to load gps history" });
   }
 });
 

@@ -104,6 +104,7 @@
     <div class="wrap">
       <h1>PoC Server Console</h1>
       <p class="sub">Quick browser UI to test auth, channels, and PTT floor control.</p>
+      <p class="sub"><a href="/dispatcher.html">Open Dispatcher Tracking Console</a></p>
 
       <div class="grid">
         <section class="card">
@@ -139,6 +140,7 @@
           <button id="btnRequest">Request Talk</button>
           <button id="btnRelease" class="danger">Release Talk</button>
           <button id="btnState">Get Floor State</button>
+          <button id="btnGpsHistory">Get PTT GPS History</button>
         </section>
       </div>
 
@@ -218,6 +220,12 @@
         const channelId = document.getElementById("channelId").value;
         try { out("PTT State", await api(`/api/ptt/floor/state/${channelId}`)); }
         catch (e) { out("PTT State Error", e); }
+      };
+
+      document.getElementById("btnGpsHistory").onclick = async () => {
+        const channelId = document.getElementById("channelId").value;
+        try { out("PTT GPS History", await api(`/api/ptt/floor/gps/history?channelId=${encodeURIComponent(channelId)}&limit=50`)); }
+        catch (e) { out("PTT GPS History Error", e); }
       };
     </script>
   </body>

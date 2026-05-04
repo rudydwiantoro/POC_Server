@@ -183,3 +183,11 @@ Expected:
 ## Notes
 - For cross-network voice reliability, add TURN (`coturn`) and pass TURN ICE servers to clients.
 - Keep JWT secret and DB credentials out of git.
+
+
+node tools/license-generator/generate-license.js --company=BALIOffice.net --server=GoingSpring --maxServers=1 --maxDevices=300 --maxOnline=120 --expiresAt=2030-12-31T23:59:59Z --secretKey=Rudy --clientKey=Dwiantoro
+
+
+eyJjb21wYW55TmFtZSI6IkJBTElPZmZpY2UubmV0Iiwic2VydmVyTmFtZSI6IkdvaW5nU3ByaW5nIiwibWF4U2VydmVycyI6MSwibWF4RGV2aWNlcyI6MzAwLCJtYXhPbmxpbmVEZXZpY2VzIjoxMjAsImV4cGlyZXNBdCI6IjIwMzAtMTItMzFUMjM6NTk6NTkuMDAwWiIsImNsaWVudEtleSI6IkR3aWFudG9ybyJ9.EJ4cK8L91oIqXBKWC2wVQ3FVlujIM4SVIJ-6P-Re1Yw
+
+eyJjb21wYW55TmFtZSI6IkJBTElPZmZpY2UubmV0Iiwic2VydmVyTmFtZSI6IkdvaW5nU3ByaW5nIiwibWF4U2VydmVycyI6MSwibWF4RGV2aWNlcyI6MzAwLCJtYXhPbmxpbmVEZXZpY2VzIjoxMjAsImV4cGlyZXNBdCI6IjIwMzAtMTItMzFUMjM6NTk6NTkuMDAwWiIsImNsaWVudEtleSI6IkR3aWFudG9ybyJ9.EJ4cK8L91oIqXBKWC2wVQ3FVlujIM4SVIJ-6P-Re1Yw

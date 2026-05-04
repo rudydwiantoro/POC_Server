@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Settings</title>
+    <style>
+      :root {
+        --bg: #071019;
+        --panel: #0f1f2d;
+        --line: #2a4960;
+        --text: #e6f0f7;
+        --muted: #9bb2c2;
+        --accent: #27c4a8;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--text); background: var(--bg); font-family: "Segoe UI", Tahoma, sans-serif; }
+      .top {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 16px; border-bottom: 1px solid var(--line);
+        background: linear-gradient(90deg, rgba(41,160,255,.15), rgba(39,196,168,.1));
+      }
+      .top h1 { margin: 0; font-size: 19px; letter-spacing: 0.7px; text-transform: uppercase; }
+      .top-right { display: flex; align-items: center; gap: 10px; }
+      .nav-link {
+        color: #b9d8ea; text-decoration: none; border: 1px solid var(--line);
+        border-radius: 999px; padding: 6px 10px; font-size: 12px;
+      }
+      .nav-link.active {
+        color: #022028; background: linear-gradient(90deg, var(--accent), #2ca5c6);
+        border-color: transparent; font-weight: 700;
+      }
+      .wrap { max-width: 900px; margin: 16px auto; padding: 0 12px; }
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .tab-btn {
+        width: auto;
+        margin: 0;
+        padding: 7px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #102535;
+        color: #b9d8ea;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .tab-btn.active {
+        color: #022028;
+        background: linear-gradient(90deg, var(--accent), #2ca5c6);
+        border-color: transparent;
+      }
+      .card {
+        border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+        padding: 14px; margin-bottom: 12px;
+      }
+      .tab-panel { display: none; }
+      .tab-panel.active { display: block; }
+      label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+      input, textarea, button {
+        width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 9px; font-size: 13px;
+      }
+      input, textarea { background: #0f2230; color: var(--text); }
+      button {
+        margin-top: 8px; background: linear-gradient(90deg, var(--accent), #2ca5c6);
+        color: #032229; font-weight: 700; cursor: pointer; letter-spacing: 0.3px;
+      }
+      .small { font-size: 12px; color: var(--muted); margin-top: 8px; white-space: pre-wrap; word-break: break-word; }
+      #loginGate {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        background: #071019; z-index: 9999;
+      }
+      #loginBox { width: 420px; background: #0f1f2d; border: 1px solid #2a4960; border-radius: 12px; padding: 18px; }
+    </style>
+  </head>
+  <body>
+    <div id="loginGate">
+      <div id="loginBox">
+        <h2 style="margin:0 0 10px 0;">Admin Login</h2>
+        <label for="userId">User ID</label>
+        <input id="userId" value="supervisor" />
+        <label for="deviceId" style="margin-top:8px;display:block;">Device ID</label>
+        <input id="deviceId" value="desk1" />
+        <button id="btnLogin">Login & Enter Admin</button>
+        <div class="small" id="loginStatus">Not logged in.</div>
+      </div>
+    </div>
+
+    <div class="top">
+      <h1>Admin Settings</h1>
+      <div class="top-right">
+        <a class="nav-link" href="/dispatcher.html">Dispatch Console</a>
+        <a class="nav-link active" href="/admin.html">Admin Settings</a>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="licenseTab">License</button>
+        <button class="tab-btn" data-tab="activationTab">Activation</button>
+        <button class="tab-btn" data-tab="serverTab">Server Config</button>
+        <button class="tab-btn" data-tab="geofenceTab">Geofence</button>
+        <button class="tab-btn" data-tab="permTab">Permissions</button>
+        <button class="tab-btn" data-tab="beaconTab">Beacon</button>
+      </div>
+
+      <div id="licenseTab" class="tab-panel active">
+      <div class="card">
+        <div><b>About & License</b></div>
+        <div id="aboutInfo" class="small">Loading...</div>
+        <label for="licenseKeyInput">License Key</label>
+        <textarea id="licenseKeyInput" rows="4" placeholder="Paste full license key (single line)"></textarea>
+        <button id="btnSaveLicense">Save License Key</button>
+      </div>
+      </div>
+
+      <div id="activationTab" class="tab-panel">
+      <div class="card">
+        <div><b>Device Activation</b></div>
+        <label for="activateUserId">User ID</label>
+        <input id="activateUserId" placeholder="mis. u1" />
+        <label for="activateDeviceId">Device ID</label>
+        <input id="activateDeviceId" placeholder="mis. d1-new" />
+        <label for="activateDeviceKey">Device Key</label>
+        <textarea id="activateDeviceKey" rows="3" placeholder="Paste device key here"></textarea>
+        <button id="btnActivateDevice">Activate Device</button>
+      </div>
+      </div>
+
+      <div id="serverTab" class="tab-panel">
+      <div class="card">
+        <div><b>Server Setting AutoConfig</b></div>
+        <button id="btnLoadServerConfig">Get Server Setting Otomatis</button>
+        <div id="serverConfigInfo" class="small">Server config belum dimuat.</div>
+      </div>
+      </div>
+
+      <div id="geofenceTab" class="tab-panel">
+      <div class="card">
+        <div><b>Geofence Admin</b></div>
+        <div class="small">Edit geofence as JSON array.</div>
+        <textarea id="geofenceJson" rows="8" placeholder="[]"></textarea>
+        <button id="btnLoadGeofences">Load Geofences</button>
+        <button id="btnSaveGeofences">Save Geofences</button>
+      </div>
+      </div>
+
+      <div id="permTab" class="tab-panel">
+      <div class="card">
+        <div><b>Role Menu Permission</b></div>
+        <select id="roleSelect"></select>
+        <div id="rolePermList" class="small"></div>
+        <button id="btnSaveRolePerm">Save Role Permission</button>
+      </div>
+      <div class="card">
+        <div><b>User Menu Permission</b></div>
+        <select id="userSelect"></select>
+        <div id="userPermList" class="small"></div>
+        <button id="btnSaveUserPerm">Save User Permission</button>
+      </div>
+      </div>
+
+      <div id="beaconTab" class="tab-panel">
+      <div class="card">
+        <div><b>Device Beacon Setup</b></div>
+        <label for="beaconDeviceSelect">Device</label>
+        <select id="beaconDeviceSelect"></select>
+        <label><input id="beaconEnabled" type="checkbox" /> Beacon Enabled</label>
+        <label for="beaconInterval">Interval (minutes)</label>
+        <input id="beaconInterval" type="number" min="1" max="120" value="15" />
+        <label for="beaconDistance">Distance (km)</label>
+        <input id="beaconDistance" type="number" min="0.1" step="0.1" value="1" />
+        <label for="beaconMode">Mode</label>
+        <select id="beaconMode"><option value="normal">normal</option><option value="eco">eco</option></select>
+        <label for="beaconBatchSize">Eco Batch Size (points)</label>
+        <input id="beaconBatchSize" type="number" min="10" max="500" value="50" />
+        <label for="beaconBatchWait">Eco Max Wait (minutes)</label>
+        <input id="beaconBatchWait" type="number" min="10" max="720" value="120" />
+        <label for="beaconNormalSend">Normal Send Every (minutes)</label>
+        <input id="beaconNormalSend" type="number" min="5" max="240" value="60" />
+        <button id="btnSaveBeaconSetting">Save Beacon Setting</button>
+      </div>
+      </div>
+      <div id="mapInfo" class="small"></div>
+    </div>
+
+    <script>
+      let accessToken = "";
+      const MENU_KEYS = ["tracking", "ptt_history", "geofence_admin", "user_permission_admin", "role_permission_admin", "emergency_override"];
+      let rolePermState = { menuKeys: [], roles: {} };
+      let userPermState = { menuKeys: [], users: [] };
+      let deviceBeaconCache = [];
+
+      function setText(id, text) {
+        document.getElementById(id).textContent = text;
+      }
+      function switchTab(tabId) {
+        const panels = document.querySelectorAll(".tab-panel");
+        panels.forEach((p) => p.classList.remove("active"));
+        const btns = document.querySelectorAll(".tab-btn");
+        btns.forEach((b) => b.classList.remove("active"));
+        const panel = document.getElementById(tabId);
+        if (panel) panel.classList.add("active");
+        const btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+        if (btn) btn.classList.add("active");
+      }
+
+      async function api(path, options = {}) {
+        const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+        const res = await fetch(path, { ...options, headers });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
+        return data;
+      }
+
+      async function login() {
+        const userId = document.getElementById("userId").value.trim();
+        const deviceId = document.getElementById("deviceId").value.trim();
+        const data = await api("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ userId, deviceId })
+        });
+        accessToken = data.accessToken || "";
+        localStorage.setItem("poc_dispatch_access_token", accessToken);
+        localStorage.setItem("poc_dispatch_user_id", userId);
+        localStorage.setItem("poc_dispatch_device_id", deviceId);
+        setText("loginStatus", `Logged in as ${userId} (${data.user ? data.user.role : "-"})`);
+      }
+
+      async function loadLicenseInfo() {
+        const data = await api("/api/dispatch/about");
+        const txt = `Company: ${data.companyName || "-"} | Server: ${data.serverName || "-"} | Exp: ${data.expiresAt || "-"} | Active: ${data.active ? "yes" : "no"}`;
+        setText("aboutInfo", txt);
+      }
+
+      async function loadServerConfigAuto() {
+        const res = await fetch("/api/public/server-config", { headers: { "Content-Type": "application/json" } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "failed to load server config");
+        setText("serverConfigInfo", `HTTP: ${data.httpBaseUrl} | WS: ${data.wsUrl}`);
+      }
+
+      async function enterAdminAfterAuth() {
+        await loadLicenseInfo();
+        await loadPermissionAdminData();
+        await loadDeviceBeaconAdmin();
+        document.getElementById("loginGate").style.display = "none";
+      }
+
+      async function loadPermissionAdminData() {
+        rolePermState = await api("/api/dispatch/admin/menu-permissions/roles");
+        userPermState = await api("/api/dispatch/admin/menu-permissions/users");
+        const roles = Object.keys(rolePermState.roles || {}).sort();
+        const roleSel = document.getElementById("roleSelect");
+        roleSel.innerHTML = roles.map((r) => `<option value="${r}">${r}</option>`).join("");
+        const userSel = document.getElementById("userSelect");
+        userSel.innerHTML = userPermState.users.map((u) => `<option value="${u.userId}">${u.userId} (${u.role})</option>`).join("");
+        renderRolePermEditor();
+        renderUserPermEditor();
+      }
+
+      function renderRolePermEditor() {
+        const role = document.getElementById("roleSelect").value;
+        const node = document.getElementById("rolePermList");
+        const p = (rolePermState.roles && rolePermState.roles[role]) || {};
+        node.innerHTML = MENU_KEYS.map((k) => {
+          const checked = p[k] !== false ? "checked" : "";
+          return `<label><input type="checkbox" data-k="${k}" ${checked}/> ${k}</label>`;
+        }).join("");
+      }
+
+      function renderUserPermEditor() {
+        const userId = document.getElementById("userSelect").value;
+        const node = document.getElementById("userPermList");
+        const user = userPermState.users.find((u) => u.userId === userId);
+        if (!user) { node.innerHTML = ""; return; }
+        node.innerHTML = MENU_KEYS.map((k) => {
+          const val = user.permissions[k];
+          return `<label>${k}
+            <select data-k="${k}">
+              <option value="inherit" ${val === null ? "selected" : ""}>inherit</option>
+              <option value="allow" ${val === true ? "selected" : ""}>allow</option>
+              <option value="deny" ${val === false ? "selected" : ""}>deny</option>
+            </select>
+          </label>`;
+        }).join("");
+      }
+
+      async function loadDeviceBeaconAdmin() {
+        const res = await api("/api/dispatch/admin/devices");
+        deviceBeaconCache = Array.isArray(res.devices) ? res.devices : [];
+        const sel = document.getElementById("beaconDeviceSelect");
+        sel.innerHTML = deviceBeaconCache.map((d) => `<option value="${d.deviceId}">${d.deviceId} (${d.userId})</option>`).join("");
+        onBeaconDeviceSelected();
+      }
+
+      function onBeaconDeviceSelected() {
+        const id = document.getElementById("beaconDeviceSelect").value;
+        const d = deviceBeaconCache.find((x) => x.deviceId === id);
+        if (!d) return;
+        document.getElementById("beaconEnabled").checked = Boolean(d.beaconEnabled);
+        document.getElementById("beaconInterval").value = String(d.beaconIntervalMin || 15);
+        document.getElementById("beaconDistance").value = String(d.beaconDistanceKm || 1);
+        document.getElementById("beaconMode").value = d.beaconMode || "normal";
+        document.getElementById("beaconBatchSize").value = String(d.beaconBatchSize || 50);
+        document.getElementById("beaconBatchWait").value = String(d.beaconBatchMaxWaitMin || 120);
+        document.getElementById("beaconNormalSend").value = String(d.beaconNormalSendMin || 60);
+      }
+
+      document.getElementById("btnLogin").onclick = async () => {
+        try {
+          await login();
+          await enterAdminAfterAuth();
+        } catch (e) {
+          setText("loginStatus", `Login failed: ${e.message}`);
+        }
+      };
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.onclick = () => switchTab(btn.dataset.tab);
+      });
+
+      document.getElementById("btnSaveLicense").onclick = async () => {
+        const licenseKey = document.getElementById("licenseKeyInput").value.trim();
+        if (!licenseKey) {
+          setText("mapInfo", "License key wajib diisi.");
+          return;
+        }
+        try {
+          await api("/api/dispatch/admin/license", {
+            method: "PUT",
+            body: JSON.stringify({ licenseKey })
+          });
+          await loadLicenseInfo();
+          setText("mapInfo", "License key saved.");
+        } catch (e) {
+          setText("mapInfo", `Save license failed: ${e.message}`);
+        }
+      };
+
+      document.getElementById("btnActivateDevice").onclick = async () => {
+        const userId = document.getElementById("activateUserId").value.trim();
+        const deviceId = document.getElementById("activateDeviceId").value.trim();
+        const deviceKey = document.getElementById("activateDeviceKey").value.trim();
+        if (!userId || !deviceId || !deviceKey) {
+          setText("mapInfo", "User ID, Device ID, Device Key wajib diisi.");
+          return;
+        }
+        try {
+          await api("/api/dispatch/admin/devices/activate", {
+            method: "POST",
+            body: JSON.stringify({ userId, deviceId, deviceKey, platform: "android" })
+          });
+          setText("mapInfo", `Device activated: ${userId}/${deviceId}`);
+        } catch (e) {
+          setText("mapInfo", `Activate device failed: ${e.message}`);
+        }
+      };
+
+      document.getElementById("btnLoadServerConfig").onclick = async () => {
+        try {
+          await loadServerConfigAuto();
+          setText("mapInfo", "Server setting loaded.");
+        } catch (e) {
+          setText("mapInfo", `Get server setting failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnLoadGeofences").onclick = async () => {
+        try {
+          const data = await api("/api/dispatch/geofences");
+          document.getElementById("geofenceJson").value = JSON.stringify(data.geofences || [], null, 2);
+          setText("mapInfo", "Geofences loaded.");
+        } catch (e) {
+          setText("mapInfo", `Load geofences failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnSaveGeofences").onclick = async () => {
+        try {
+          const geofences = JSON.parse(document.getElementById("geofenceJson").value || "[]");
+          await api("/api/dispatch/geofences", { method: "PUT", body: JSON.stringify({ geofences }) });
+          setText("mapInfo", "Geofences saved.");
+        } catch (e) {
+          setText("mapInfo", `Save geofences failed: ${e.message}`);
+        }
+      };
+      document.getElementById("roleSelect").onchange = renderRolePermEditor;
+      document.getElementById("userSelect").onchange = renderUserPermEditor;
+      document.getElementById("btnSaveRolePerm").onclick = async () => {
+        const role = document.getElementById("roleSelect").value;
+        const checks = document.querySelectorAll("#rolePermList input[type=checkbox]");
+        const permissions = {};
+        checks.forEach((c) => { permissions[c.dataset.k] = c.checked; });
+        try {
+          await api(`/api/dispatch/admin/menu-permissions/roles/${encodeURIComponent(role)}`, {
+            method: "PUT",
+            body: JSON.stringify({ permissions })
+          });
+          setText("mapInfo", `Role permission saved: ${role}`);
+        } catch (e) {
+          setText("mapInfo", `Save role permission failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnSaveUserPerm").onclick = async () => {
+        const userId = document.getElementById("userSelect").value;
+        const sels = document.querySelectorAll("#userPermList select[data-k]");
+        const permissions = {};
+        sels.forEach((s) => {
+          if (s.value === "inherit") permissions[s.dataset.k] = null;
+          else permissions[s.dataset.k] = s.value === "allow";
+        });
+        try {
+          await api(`/api/dispatch/admin/menu-permissions/users/${encodeURIComponent(userId)}`, {
+            method: "PUT",
+            body: JSON.stringify({ permissions })
+          });
+          setText("mapInfo", `User permission saved: ${userId}`);
+        } catch (e) {
+          setText("mapInfo", `Save user permission failed: ${e.message}`);
+        }
+      };
+      document.getElementById("beaconDeviceSelect").onchange = onBeaconDeviceSelected;
+      document.getElementById("btnSaveBeaconSetting").onclick = async () => {
+        const deviceId = document.getElementById("beaconDeviceSelect").value;
+        try {
+          await api(`/api/dispatch/admin/devices/${encodeURIComponent(deviceId)}/beacon`, {
+            method: "PUT",
+            body: JSON.stringify({
+              enabled: document.getElementById("beaconEnabled").checked,
+              intervalMin: Number(document.getElementById("beaconInterval").value) || 15,
+              distanceKm: Number(document.getElementById("beaconDistance").value) || 1,
+              mode: document.getElementById("beaconMode").value,
+              batchSize: Number(document.getElementById("beaconBatchSize").value) || 50,
+              batchMaxWaitMin: Number(document.getElementById("beaconBatchWait").value) || 120,
+              normalSendMin: Number(document.getElementById("beaconNormalSend").value) || 60
+            })
+          });
+          await loadDeviceBeaconAdmin();
+          setText("mapInfo", `Beacon setting saved: ${deviceId}`);
+        } catch (e) {
+          setText("mapInfo", `Save beacon failed: ${e.message}`);
+        }
+      };
+
+      (async () => {
+        const t = localStorage.getItem("poc_dispatch_access_token") || "";
+        const u = localStorage.getItem("poc_dispatch_user_id") || "";
+        const d = localStorage.getItem("poc_dispatch_device_id") || "";
+        if (!t) return;
+        accessToken = t;
+        if (u) document.getElementById("userId").value = u;
+        if (d) document.getElementById("deviceId").value = d;
+        try {
+          await enterAdminAfterAuth();
+        } catch (_e) {
+          accessToken = "";
+          localStorage.removeItem("poc_dispatch_access_token");
+        }
+      })();
+    </script>
+  </body>
+</html>

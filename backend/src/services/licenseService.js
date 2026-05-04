@@ -50,8 +50,14 @@ function verifyDeviceActivationKey(deviceKey) {
 }
 
 async function getCurrentLicense() {
-  const { rows } = await pool.query("SELECT * FROM server_license WHERE id = 1 LIMIT 1");
-  return rows[0] || null;
+  try {
+    const { rows } = await pool.query("SELECT * FROM server_license WHERE id = 1 LIMIT 1");
+    return rows[0] || null;
+  } catch (error) {
+    // Gracefully handle older DBs that don't have this table yet.
+    if (error && error.code === "42P01") return null;
+    throw error;
+  }
 }
 
 async function setLicenseKey(licenseKey) {

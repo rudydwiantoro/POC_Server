@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dispatcher Tracking Console</title>
+    <link rel="icon" href="data:," />
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -37,6 +38,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        position: relative;
         padding: 12px 16px;
         border-bottom: 1px solid var(--line);
         background: linear-gradient(90deg, rgba(41,160,255,.15), rgba(39,196,168,.1));
@@ -51,6 +53,80 @@
         display: flex;
         align-items: center;
         gap: 10px;
+      }
+      .ptt-top-center {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        top: 8px;
+        z-index: 900;
+      }
+      .ptt-top-btn {
+        width: auto;
+        min-width: 120px;
+        padding: 9px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: linear-gradient(90deg, #27c4a8, #2ca5c6);
+        color: #042630;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+      }
+      .ptt-top-sheet {
+        position: fixed;
+        left: 50%;
+        top: 0;
+        transform: translate(-50%, -110%);
+        width: min(680px, 96vw);
+        height: 420px;
+        background: #0f1f2d;
+        border: 1px solid var(--line);
+        border-top: 0;
+        border-radius: 0 0 14px 14px;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+        z-index: 1200;
+        transition: transform 220ms ease;
+        display: flex;
+        flex-direction: column;
+      }
+      .ptt-top-sheet.open {
+        transform: translate(-50%, 0);
+      }
+      .ptt-sheet-head {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 8px;
+        padding: 10px;
+        border-bottom: 1px solid var(--line);
+        align-items: center;
+      }
+      .ptt-sheet-head select {
+        margin: 0;
+      }
+      .ptt-sheet-head button {
+        width: auto;
+        margin: 0;
+        padding: 8px 10px;
+      }
+      #quickPttFrame {
+        flex: 1;
+        width: 100%;
+        border: 0;
+        background: #08131d;
+      }
+      .nav-link {
+        color: #b9d8ea;
+        text-decoration: none;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+      .nav-link.active {
+        color: #022028;
+        background: linear-gradient(90deg, var(--accent), #2ca5c6);
+        border-color: transparent;
+        font-weight: 700;
       }
       .icon-btn {
         width: 32px;
@@ -109,12 +185,21 @@
         background: var(--panel-soft);
         border: 1px solid var(--line);
         border-radius: 10px;
-        padding: 9px;
+        padding: 8px 9px;
         margin-bottom: 8px;
         cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
       }
       .staff.active { border-color: #53d1b5; box-shadow: 0 0 0 1px #53d1b5 inset; }
-      .staff .name { font-weight: 700; }
+      .staff .name {
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
       .staff .meta { margin-top: 3px; }
       .badge {
         display: inline-block;
@@ -126,6 +211,13 @@
         font-size: 11px;
       }
       .badge.warn { background: #4b3a10; color: #ffdd86; }
+      .staff-line {
+        display: inline-block;
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
       #map { width: 100%; height: 100%; }
       .map-wrap { position: relative; }
       .floating {
@@ -169,6 +261,42 @@
       .offline {
         color: var(--warn);
       }
+      .circle-talk {
+        width: 76px;
+        height: 76px;
+        border-radius: 999px;
+        padding: 0 8px;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.3px;
+        color: #032229;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: radial-gradient(circle at 35% 30%, #74e0ff, #27c4a8 62%, #1d8db0);
+        box-shadow: 0 8px 20px rgba(39, 196, 168, 0.35);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .dialog-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+      }
+      .dialog {
+        width: 360px;
+        background: #0f1f2d;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+      }
+      .dialog-row {
+        display: flex;
+        gap: 8px;
+      }
     </style>
   </head>
   <body>
@@ -185,7 +313,12 @@
     </div>
     <div class="top">
       <h1>Dispatcher Tracking Console</h1>
+      <div class="ptt-top-center">
+        <button id="btnQuickPtt" class="ptt-top-btn">PTT</button>
+      </div>
       <div class="top-right">
+        <a class="nav-link active" href="/dispatcher.html">Dispatch Console</a>
+        <a class="nav-link" href="/admin.html">Admin Settings</a>
         <div class="meta">Desktop Browser Only - Live staff map from GPS + PTT activity</div>
         <button id="btnAboutDispatcher" class="icon-btn" title="About License">i</button>
       </div>
@@ -222,7 +355,7 @@
         <div class="box">
           <div class="meta"><b>Selected Staff Action</b></div>
           <div id="selectedUserInfo" class="small">Pilih staff dari list atau marker.</div>
-          <button id="btnTalkToSelected">Talk</button>
+          <div class="small">Use top-center PTT button for talk.</div>
           <div class="meta" style="margin-top:8px;">Last Voice Messages</div>
           <label for="historyChannel">Channel</label>
           <select id="historyChannel"><option value="">All</option></select>
@@ -236,49 +369,6 @@
           <button id="btnResetHistoryFilter">Reset Filter</button>
           <div id="selectedHistory" class="small">No history loaded.</div>
         </div>
-        <div class="box" id="geofenceAdminBox">
-          <div class="meta"><b>Geofence Editor</b></div>
-          <select id="geoSelect"></select>
-          <label for="geoRadius" style="margin-top:6px;">Radius (m)</label>
-          <input id="geoRadius" type="number" min="100" step="50" />
-          <button id="btnSaveGeofences">Save Geofences</button>
-          <div class="small">Drag center marker on map to move geofence.</div>
-        </div>
-        <div class="box" id="rolePermBox">
-          <div class="meta"><b>Role Menu Permission</b></div>
-          <select id="roleSelect"></select>
-          <div id="rolePermList" class="small"></div>
-          <button id="btnSaveRolePerm">Save Role Permission</button>
-        </div>
-        <div class="box" id="userPermBox">
-          <div class="meta"><b>User Menu Permission</b></div>
-          <select id="userSelect"></select>
-          <div id="userPermList" class="small"></div>
-          <button id="btnSaveUserPerm">Save User Permission</button>
-          <div class="small">`inherit` = follow role permission.</div>
-        </div>
-        <div class="box" id="beaconAdminBox">
-          <div class="meta"><b>Device Beacon Setup</b></div>
-          <label for="beaconDeviceSelect">Device</label>
-          <select id="beaconDeviceSelect"></select>
-          <label><input id="beaconEnabled" type="checkbox" /> Beacon Enabled</label>
-          <label for="beaconInterval">Interval (minutes)</label>
-          <input id="beaconInterval" type="number" min="1" max="120" value="15" />
-          <label for="beaconDistance">Distance (km)</label>
-          <input id="beaconDistance" type="number" min="0.1" step="0.1" value="1" />
-          <label for="beaconMode">Mode</label>
-          <select id="beaconMode">
-            <option value="normal">normal</option>
-            <option value="eco">eco</option>
-          </select>
-          <label for="beaconBatchSize">Eco Batch Size (points)</label>
-          <input id="beaconBatchSize" type="number" min="10" max="500" value="50" />
-          <label for="beaconBatchWait">Eco Max Wait (minutes)</label>
-          <input id="beaconBatchWait" type="number" min="10" max="720" value="120" />
-          <label for="beaconNormalSend">Normal Send Every (minutes)</label>
-          <input id="beaconNormalSend" type="number" min="5" max="240" value="60" />
-          <button id="btnSaveBeaconSetting">Save Beacon Setting</button>
-        </div>
         <div class="box">
           <div class="meta"><b>Device Route</b></div>
           <div class="small">Pilih staff dulu, lalu tampilkan rute.</div>
@@ -291,38 +381,38 @@
         <div class="box">
           <div class="meta"><b>About & License</b></div>
           <div id="aboutInfo" class="small">About belum dimuat.</div>
-          <label for="licenseKeyInput">License Key</label>
-          <textarea id="licenseKeyInput" rows="3" placeholder="Paste license key here"></textarea>
-          <button id="btnSaveLicense">Save License Key</button>
-          <div class="meta" style="margin-top:12px;"><b>Device Activation</b></div>
-          <label for="activateUserId">User ID</label>
-          <input id="activateUserId" placeholder="mis. u1" />
-          <label for="activateDeviceId">Device ID</label>
-          <input id="activateDeviceId" placeholder="mis. d1-new" />
-          <label for="activateDeviceKey">Device Key</label>
-          <textarea id="activateDeviceKey" rows="3" placeholder="Paste device key here"></textarea>
-          <button id="btnActivateDevice">Activate Device</button>
+          <div class="small">License & device activation moved to <a href="/admin.html" style="color:#7fd7ff;">Admin Settings</a>.</div>
         </div>
         <div class="box">
-          <div class="meta"><b>Guide & Device Setting</b></div>
-          <div class="small">
-            Untuk user baru install APK:
-            1. Buka app -> Server Config.
-            2. Isi HTTP Base URL dan WS URL.
-            3. Save, lalu login dengan User ID/Device ID.
-          </div>
-          <button id="btnLoadServerConfig">Get Server Setting Otomatis</button>
-          <div id="serverConfigInfo" class="small">Server config belum dimuat.</div>
-          <div class="small">Config URL: <span id="serverConfigUrl">-</span></div>
-          <div id="serverConfigQrWrap" class="small" style="margin-top:8px;">
-            QR autoconfig belum dimuat.
-          </div>
-          <button id="btnCopyHttp">Copy HTTP Base URL</button>
-          <button id="btnCopyWs">Copy WS URL</button>
-          <button id="btnCopyConfigUrl">Copy Config URL</button>
-          <button id="btnCopyConfigJson">Copy Config JSON</button>
+          <div class="meta"><b>Admin Modules</b></div>
+          <div class="small">Geofence, permissions, beacon settings, and server settings have been moved to <a href="/admin.html" style="color:#7fd7ff;">Admin Settings</a>.</div>
         </div>
       </aside>
+    </div>
+    <div id="quickPttSheet" class="ptt-top-sheet">
+      <div class="ptt-sheet-head">
+        <select id="quickPttChannel">
+          <option value="engineering">engineering</option>
+          <option value="housekeeping">housekeeping</option>
+          <option value="security">security</option>
+          <option value="all-call">all-call</option>
+        </select>
+        <button id="btnQuickPttReload">Apply</button>
+        <button id="btnQuickPttClose" style="background:#284052;color:#dceaf3;">Close</button>
+      </div>
+      <iframe id="quickPttFrame" title="PTT Panel"></iframe>
+    </div>
+    <div id="talkDialogBackdrop" class="dialog-backdrop">
+      <div class="dialog">
+        <div style="font-weight:700;margin-bottom:8px;">Talk Channel</div>
+        <div id="talkDialogInfo" class="small" style="margin-bottom:8px;">Pilih channel untuk talk.</div>
+        <label for="talkChannelSelect">Channel</label>
+        <select id="talkChannelSelect"></select>
+        <div class="dialog-row" style="margin-top:10px;">
+          <button id="btnTalkDialogCancel" style="background:#284052;color:#dceaf3;">Cancel</button>
+          <button id="btnTalkDialogOpen">Open PTT</button>
+        </div>
+      </div>
     </div>
 
     <script
@@ -411,6 +501,9 @@
           body: JSON.stringify({ userId, deviceId })
         });
         accessToken = data.accessToken || "";
+        localStorage.setItem("poc_dispatch_access_token", accessToken);
+        localStorage.setItem("poc_dispatch_user_id", userId);
+        localStorage.setItem("poc_dispatch_device_id", deviceId);
         const role = data.user ? data.user.role : "-";
         setText("loginStatus", `Logged in as ${userId} (${role})`);
         await loadMyPermissions();
@@ -419,14 +512,7 @@
       async function loadMyPermissions() {
         const data = await api("/api/dispatch/menu-permissions/me");
         permissions = data.permissions || {};
-        applyMenuVisibility();
         await loadLicenseInfo();
-        if (permissions.role_permission_admin || permissions.user_permission_admin) {
-          await loadPermissionAdminData();
-        }
-        if (permissions.emergency_override) {
-          await loadDeviceBeaconAdmin();
-        }
       }
 
       async function loadLicenseInfo() {
@@ -450,10 +536,7 @@
       }
 
       function applyMenuVisibility() {
-        document.getElementById("geofenceAdminBox").style.display = permissions.geofence_admin ? "block" : "none";
-        document.getElementById("rolePermBox").style.display = permissions.role_permission_admin ? "block" : "none";
-        document.getElementById("userPermBox").style.display = permissions.user_permission_admin ? "block" : "none";
-        document.getElementById("beaconAdminBox").style.display = permissions.emergency_override ? "block" : "none";
+        // Admin modules moved to /admin.html.
       }
 
       async function loadPermissionAdminData() {
@@ -568,14 +651,15 @@
             el.className = `staff${selectedUserId === s.userId ? " active" : ""}`;
             const mins = minutesSince(s.lastKnownLocation ? s.lastKnownLocation.recordedAt : null);
             const stale = mins == null || mins > 30;
+            const lastGps = s.lastKnownLocation ? fmtTime(s.lastKnownLocation.recordedAt) : "No data";
+            const lastPtt = s.lastPtt ? `${s.lastPtt.channelId} @ ${fmtTime(s.lastPtt.startedAt)}` : "No data";
+            const channelsText = (s.channels || []).join(", ") || "-";
+            const gpsDetail = s.lastKnownLocation
+              ? `${s.lastKnownLocation.latitude.toFixed(5)}, ${s.lastKnownLocation.longitude.toFixed(5)}`
+              : "-";
+            el.title = `User: ${s.userId}\nDevice: ${s.deviceId}\nRole: ${s.role}\nChannels: ${channelsText}\nLast GPS: ${lastGps}\nGPS Coords: ${gpsDetail}\nLast PTT: ${lastPtt}\nImage: ${s.lastImageAt ? fmtTime(s.lastImageAt) : "-"}`;
             el.innerHTML = `
-              <div class="name">${s.displayName} <span class="meta">(${s.userId})</span></div>
-              <div class="meta">Device: ${s.deviceId} | Role: ${s.role}</div>
-              <div class="meta">Channels: ${(s.channels || []).join(", ") || "-"}</div>
-              <div class="meta">Last GPS: ${s.lastKnownLocation ? fmtTime(s.lastKnownLocation.recordedAt) : "No data"}</div>
-              <div class="meta">Last PTT: ${s.lastPtt ? `${s.lastPtt.channelId} @ ${fmtTime(s.lastPtt.startedAt)}` : "No data"}</div>
-              <div class="meta">Image: ${s.lastImageAt ? `📷 ${fmtTime(s.lastImageAt)}` : "-"}</div>
-              <button class="route-btn" data-user="${s.userId}" style="margin-top:6px;background:#2a9fff;color:#001a2a;">🧭 Route</button>
+              <div class="name"><span class="staff-line">${s.displayName} (${s.userId}) - ${s.deviceId}</span></div>
               <span class="badge ${stale ? "warn" : ""}">${stale ? "stale/offline" : "active"}</span>
             `;
             el.onclick = () => {
@@ -585,22 +669,6 @@
               focusStaff(s.userId);
               loadSelectedUserHistory(s.userId);
             };
-            const routeBtn = el.querySelector(".route-btn");
-            if (routeBtn) {
-              routeBtn.onclick = (ev) => {
-                ev.stopPropagation();
-                selectedUserId = s.userId;
-                selectedStaff = s;
-                if (!document.getElementById("routeFrom").value) {
-                  const start = new Date();
-                  start.setHours(0, 0, 0, 0);
-                  const end = new Date();
-                  document.getElementById("routeFrom").value = start.toISOString().slice(0, 16);
-                  document.getElementById("routeTo").value = end.toISOString().slice(0, 16);
-                }
-                showRouteForSelected().catch((e) => setText("mapInfo", `Load route failed: ${e.message}`));
-              };
-            }
             wrap.appendChild(el);
           });
         }
@@ -1015,70 +1083,61 @@
         renderList(staffCache);
         upsertMarkers(staffCache);
       };
-      document.getElementById("geoSelect").onchange = onGeofenceSelected;
-      document.getElementById("geoRadius").onchange = () => {
-        const sel = document.getElementById("geoSelect").value;
-        const zone = GEOFENCES.find((g) => g.id === sel);
-        if (!zone) return;
-        zone.radiusM = Number(document.getElementById("geoRadius").value) || zone.radiusM;
-        drawGeofences();
+      const geoSelectEl = document.getElementById("geoSelect");
+      const geoRadiusEl = document.getElementById("geoRadius");
+      const saveGeoBtn = document.getElementById("btnSaveGeofences");
+      if (geoSelectEl) geoSelectEl.onchange = onGeofenceSelected;
+      if (geoRadiusEl) {
+        geoRadiusEl.onchange = () => {
+          const sel = document.getElementById("geoSelect").value;
+          const zone = GEOFENCES.find((g) => g.id === sel);
+          if (!zone) return;
+          zone.radiusM = Number(document.getElementById("geoRadius").value) || zone.radiusM;
+          drawGeofences();
+        };
+      }
+      if (saveGeoBtn) {
+        saveGeoBtn.onclick = async () => {
+          try {
+            await api("/api/dispatch/geofences", { method: "PUT", body: JSON.stringify({ geofences: GEOFENCES }) });
+            setText("mapInfo", "Geofences saved.");
+          } catch (e) {
+            setText("mapInfo", `Save geofence failed: ${e.message}`);
+          }
+        };
+      }
+      document.getElementById("btnTalkDialogCancel").onclick = () => {
+        document.getElementById("talkDialogBackdrop").style.display = "none";
       };
-      document.getElementById("btnSaveGeofences").onclick = async () => {
-        try {
-          await api("/api/dispatch/geofences", { method: "PUT", body: JSON.stringify({ geofences: GEOFENCES }) });
-          setText("mapInfo", "Geofences saved.");
-        } catch (e) {
-          setText("mapInfo", `Save geofence failed: ${e.message}`);
-        }
-      };
-      document.getElementById("roleSelect").onchange = renderRolePermEditor;
-      document.getElementById("userSelect").onchange = renderUserPermEditor;
-      document.getElementById("btnSaveRolePerm").onclick = async () => {
-        const role = document.getElementById("roleSelect").value;
-        const checks = document.querySelectorAll("#rolePermList input[type=checkbox]");
-        const p = {};
-        checks.forEach((c) => { p[c.dataset.k] = c.checked; });
-        try {
-          await api(`/api/dispatch/admin/menu-permissions/roles/${encodeURIComponent(role)}`, {
-            method: "PUT",
-            body: JSON.stringify({ permissions: p })
-          });
-          setText("mapInfo", `Role permission saved: ${role}`);
-        } catch (e) {
-          setText("mapInfo", `Save role permission failed: ${e.message}`);
-        }
-      };
-      document.getElementById("btnSaveUserPerm").onclick = async () => {
-        const userId = document.getElementById("userSelect").value;
-        const sels = document.querySelectorAll("#userPermList select[data-k]");
-        const p = {};
-        sels.forEach((s) => {
-          if (s.value === "inherit") p[s.dataset.k] = null;
-          else p[s.dataset.k] = s.value === "allow";
-        });
-        try {
-          await api(`/api/dispatch/admin/menu-permissions/users/${encodeURIComponent(userId)}`, {
-            method: "PUT",
-            body: JSON.stringify({ permissions: p })
-          });
-          setText("mapInfo", `User permission saved: ${userId}`);
-        } catch (e) {
-          setText("mapInfo", `Save user permission failed: ${e.message}`);
-        }
-      };
-      document.getElementById("btnTalkToSelected").onclick = () => {
-        if (!selectedStaff) {
-          setText("mapInfo", "Pilih staff dulu.");
-          return;
-        }
-        const channelId = selectedStaff.lastPtt && selectedStaff.lastPtt.channelId
-          ? selectedStaff.lastPtt.channelId
-          : (selectedStaff.channels && selectedStaff.channels[0]) || "engineering";
+      document.getElementById("btnTalkDialogOpen").onclick = () => {
+        const channelId = document.getElementById("talkChannelSelect").value || "engineering";
         const dispatcherUserId = document.getElementById("userId").value.trim();
         const dispatcherDeviceId = document.getElementById("deviceId").value.trim();
         const url = `/voice.html?userId=${encodeURIComponent(dispatcherUserId)}&deviceId=${encodeURIComponent(dispatcherDeviceId)}&channelId=${encodeURIComponent(channelId)}`;
+        document.getElementById("talkDialogBackdrop").style.display = "none";
         window.open(url, "_blank");
       };
+      function refreshQuickPttFrame() {
+        const channelId = document.getElementById("quickPttChannel").value || "engineering";
+        const dispatcherUserId = document.getElementById("userId").value.trim();
+        const dispatcherDeviceId = document.getElementById("deviceId").value.trim();
+        const url = `/voice.html?userId=${encodeURIComponent(dispatcherUserId)}&deviceId=${encodeURIComponent(dispatcherDeviceId)}&channelId=${encodeURIComponent(channelId)}`;
+        document.getElementById("quickPttFrame").src = url;
+      }
+      function openQuickPttSheet() {
+        document.getElementById("quickPttSheet").classList.add("open");
+        refreshQuickPttFrame();
+      }
+      function closeQuickPttSheet() {
+        document.getElementById("quickPttSheet").classList.remove("open");
+      }
+      document.getElementById("btnQuickPtt").onclick = () => {
+        const sheet = document.getElementById("quickPttSheet");
+        if (sheet.classList.contains("open")) closeQuickPttSheet();
+        else openQuickPttSheet();
+      };
+      document.getElementById("btnQuickPttReload").onclick = refreshQuickPttFrame;
+      document.getElementById("btnQuickPttClose").onclick = closeQuickPttSheet;
       document.getElementById("btnApplyHistoryFilter").onclick = () => {
         if (!selectedUserId) {
           setText("mapInfo", "Pilih staff dulu.");
@@ -1093,62 +1152,17 @@
         document.getElementById("historyLimit").value = "12";
         if (selectedUserId) loadSelectedUserHistory(selectedUserId);
       };
-      document.getElementById("btnLoadServerConfig").onclick = async () => {
-        try {
-          await loadServerConfigAuto();
-          setText("mapInfo", "Server setting loaded.");
-        } catch (e) {
-          setText("mapInfo", `Get server setting failed: ${e.message}`);
-        }
-      };
-      document.getElementById("btnCopyHttp").onclick = () => {
-        copyText(autoServerConfig ? autoServerConfig.httpBaseUrl : "", "HTTP Base URL");
-      };
-      document.getElementById("btnCopyWs").onclick = () => {
-        copyText(autoServerConfig ? autoServerConfig.wsUrl : "", "WS URL");
-      };
-      document.getElementById("btnCopyConfigUrl").onclick = () => {
-        copyText(`${location.origin}/.well-known/poc-radio-server-config.json`, "Config URL");
-      };
-      document.getElementById("btnCopyConfigJson").onclick = () => {
-        copyText(autoServerConfig ? JSON.stringify(autoServerConfig, null, 2) : "", "Config JSON");
-      };
-      document.getElementById("btnSaveLicense").onclick = async () => {
-        const licenseKey = document.getElementById("licenseKeyInput").value.trim();
-        if (!licenseKey) {
-          setText("mapInfo", "License key wajib diisi.");
-          return;
-        }
-        try {
-          await api("/api/dispatch/admin/license", {
-            method: "PUT",
-            body: JSON.stringify({ licenseKey })
-          });
-          await loadLicenseInfo();
-          setText("mapInfo", "License key saved.");
-        } catch (e) {
-          setText("mapInfo", `Save license failed: ${e.message}`);
-        }
-      };
-      document.getElementById("btnActivateDevice").onclick = async () => {
-        const userId = document.getElementById("activateUserId").value.trim();
-        const deviceId = document.getElementById("activateDeviceId").value.trim();
-        const deviceKey = document.getElementById("activateDeviceKey").value.trim();
-        if (!userId || !deviceId || !deviceKey) {
-          setText("mapInfo", "User ID, Device ID, Device Key wajib diisi.");
-          return;
-        }
-        try {
-          await api("/api/dispatch/admin/devices/activate", {
-            method: "POST",
-            body: JSON.stringify({ userId, deviceId, deviceKey, platform: "android" })
-          });
-          setText("mapInfo", `Device activated: ${userId}/${deviceId}`);
-          if (permissions.emergency_override) await loadDeviceBeaconAdmin();
-        } catch (e) {
-          setText("mapInfo", `Activate device failed: ${e.message}`);
-        }
-      };
+      const btnLoadServerConfig = document.getElementById("btnLoadServerConfig");
+      if (btnLoadServerConfig) {
+        btnLoadServerConfig.onclick = async () => {
+          try {
+            await loadServerConfigAuto();
+            setText("mapInfo", "Server setting loaded.");
+          } catch (e) {
+            setText("mapInfo", `Get server setting failed: ${e.message}`);
+          }
+        };
+      }
       document.getElementById("btnAboutDispatcher").onclick = async () => {
         try {
           await showDispatcherAbout();
@@ -1156,13 +1170,41 @@
           setText("mapInfo", `Load about failed: ${e.message}`);
         }
       };
-      document.getElementById("beaconDeviceSelect").onchange = onBeaconDeviceSelected;
-      document.getElementById("btnSaveBeaconSetting").onclick = () => {
-        saveBeaconSetting().catch((e) => setText("mapInfo", `Save beacon failed: ${e.message}`));
-      };
+      const beaconSelectEl = document.getElementById("beaconDeviceSelect");
+      const btnSaveBeaconSetting = document.getElementById("btnSaveBeaconSetting");
+      if (beaconSelectEl) beaconSelectEl.onchange = onBeaconDeviceSelected;
+      if (btnSaveBeaconSetting) {
+        btnSaveBeaconSetting.onclick = () => {
+          saveBeaconSetting().catch((e) => setText("mapInfo", `Save beacon failed: ${e.message}`));
+        };
+      }
       document.getElementById("btnShowRoute").onclick = () => {
         showRouteForSelected().catch((e) => setText("mapInfo", `Load route failed: ${e.message}`));
       };
+
+      (async () => {
+        const t = localStorage.getItem("poc_dispatch_access_token") || "";
+        const u = localStorage.getItem("poc_dispatch_user_id") || "";
+        const d = localStorage.getItem("poc_dispatch_device_id") || "";
+        if (!t) return;
+        accessToken = t;
+        if (u) document.getElementById("userId").value = u;
+        if (d) document.getElementById("deviceId").value = d;
+        try {
+          await loadMyPermissions();
+          await loadGeofences();
+          await refreshTracking();
+          document.getElementById("loginGate").style.display = "none";
+          if (refreshTimer) clearInterval(refreshTimer);
+          refreshTimer = setInterval(() => {
+            refreshTracking().catch((e) => setText("mapInfo", `Auto refresh failed: ${e.message}`));
+          }, 15000);
+        } catch (_e) {
+          accessToken = "";
+          localStorage.removeItem("poc_dispatch_access_token");
+        }
+      })();
     </script>
   </body>
 </html>
+

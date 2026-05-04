@@ -2,6 +2,10 @@ const { assertLicenseActive } = require("../services/licenseService");
 
 async function requireActiveLicense(_req, res, next) {
   const req = _req;
+  // Dispatcher must be able to enter dispatch console to set the first license key.
+  if (req.baseUrl === "/api/dispatch" && req.auth && req.auth.role === "dispatcher") {
+    return next();
+  }
   if (req.path === "/admin/license" || req.path === "/about") {
     return next();
   }

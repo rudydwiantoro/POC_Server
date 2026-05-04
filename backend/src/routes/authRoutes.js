@@ -60,6 +60,8 @@ router.post("/login", async (req, res) => {
       }
     });
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("Login error:", error);
     return res.status(500).json({ error: "login failed" });
   }
 });

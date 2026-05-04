@@ -38,6 +38,7 @@ Health:
 ## Web Pages
 - Voice test: `http://localhost:3100/voice.html`
 - Dispatcher desktop: `http://localhost:3100/dispatcher.html`
+- Admin settings (license/device activation): `http://localhost:3100/admin.html`
 - API console: `http://localhost:3100/index.html`
 
 ## Seed Accounts
@@ -154,9 +155,8 @@ Jika upgrade dari schema lama:
 cd backend
 npm run init-db
 ```
-`init-db` sekarang otomatis menjalankan:
+`init-db` menjalankan satu file schema utama:
 - `sql/001_init_schema.sql`
-- seluruh file `sql/migrations/*.sql` (urut nama file)
 
 Lanjutkan dengan:
 ```bash

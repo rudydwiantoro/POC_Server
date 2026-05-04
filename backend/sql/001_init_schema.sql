@@ -140,3 +140,53 @@ CREATE INDEX IF NOT EXISTS idx_ptt_text_messages_channel_time
 
 CREATE INDEX IF NOT EXISTS idx_ptt_image_messages_channel_time
   ON ptt_image_messages(channel_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ptt_image_messages_speaker_time
+  ON ptt_image_messages(speaker_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS server_license (
+  id INTEGER PRIMARY KEY,
+  license_key TEXT NOT NULL,
+  company_name TEXT NOT NULL,
+  server_name TEXT NOT NULL,
+  max_servers INTEGER NOT NULL,
+  max_devices INTEGER NOT NULL,
+  max_online_devices INTEGER NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS recycle_policies (
+  target_key TEXT PRIMARY KEY,
+  retention_days INTEGER NOT NULL CHECK (retention_days >= 1),
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS recycle_cleanup_logs (
+  id BIGSERIAL PRIMARY KEY,
+  target_key TEXT NOT NULL,
+  deleted_rows INTEGER NOT NULL DEFAULT 0,
+  deleted_files INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Backward-compatible patching for existing DBs created before beacon fields existed.
+ALTER TABLE devices
+  ADD COLUMN IF NOT EXISTS beacon_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS beacon_interval_min INTEGER NOT NULL DEFAULT 15,
+  ADD COLUMN IF NOT EXISTS beacon_distance_km DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+  ADD COLUMN IF NOT EXISTS beacon_mode TEXT NOT NULL DEFAULT 'normal',
+  ADD COLUMN IF NOT EXISTS beacon_batch_size INTEGER NOT NULL DEFAULT 50,
+  ADD COLUMN IF NOT EXISTS beacon_batch_max_wait_min INTEGER NOT NULL DEFAULT 120,
+  ADD COLUMN IF NOT EXISTS beacon_normal_send_min INTEGER NOT NULL DEFAULT 60;
+
+INSERT INTO recycle_policies (target_key, retention_days, enabled, updated_at)
+VALUES
+  ('ptt_voice_messages', 30, TRUE, NOW()),
+  ('location_points_log', 30, TRUE, NOW()),
+  ('ptt_text_messages', 30, TRUE, NOW()),
+  ('ptt_image_messages', 30, TRUE, NOW())
+ON CONFLICT (target_key) DO NOTHING;

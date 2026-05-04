@@ -55,6 +55,32 @@ CREATE TABLE IF NOT EXISTS alerts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS geofences (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  center_lat DOUBLE PRECISION NOT NULL,
+  center_lon DOUBLE PRECISION NOT NULL,
+  radius_m DOUBLE PRECISION NOT NULL,
+  color TEXT NOT NULL DEFAULT '#2ca58d',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS role_menu_permissions (
+  role TEXT NOT NULL,
+  menu_key TEXT NOT NULL,
+  can_access BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (role, menu_key)
+);
+
+CREATE TABLE IF NOT EXISTS user_menu_permissions (
+  user_id UUID NOT NULL REFERENCES users(id),
+  menu_key TEXT NOT NULL,
+  can_access BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, menu_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_location_points_device_time
   ON location_points(device_id, recorded_at DESC);
 

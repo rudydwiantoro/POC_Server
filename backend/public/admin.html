@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Settings Console</title>
+    <style>
+      :root { --bg:#08141d; --panel:#0f2230; --line:#2b4b60; --text:#e8f1f7; --muted:#9bb2c2; --accent:#28c6a8; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; color:var(--text); background:var(--bg); }
+      .top { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); }
+      .top button { width:auto; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#142d3d; color:var(--text); margin-top:0; }
+      .wrap { max-width:980px; margin:0 auto; padding:12px; }
+      .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; }
+      .meta { color:var(--muted); font-size:12px; }
+      label { display:block; font-size:12px; color:var(--muted); margin:7px 0 4px; }
+      input, select, button { width:100%; border:1px solid var(--line); border-radius:8px; padding:9px; background:#102737; color:var(--text); }
+      button { margin-top:8px; background:linear-gradient(90deg,var(--accent),#2ea0cf); color:#04252f; font-weight:700; cursor:pointer; }
+      .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    </style>
+  </head>
+  <body>
+      <div class="top">
+      <div><b>Admin Settings Console</b> <span class="meta" id="who">-</span></div>
+      <div style="display:flex;gap:8px;">
+        <button id="btnToPtt">PTT</button>
+        <button id="btnToDispatcher">Dispatcher Console</button>
+        <button id="btnToAdmin">Admin</button>
+        <button id="btnLogout">Logout</button>
+      </div>
+    </div>
+    <div class="wrap">
+      <div class="card">
+        <div class="meta"><b>Geofence Editor</b></div>
+        <select id="geoSelect"></select>
+        <label for="geoRadius">Radius (m)</label>
+        <input id="geoRadius" type="number" min="100" step="50" />
+        <button id="btnSaveGeofences">Save Geofences</button>
+      </div>
+      <div class="card">
+        <div class="meta"><b>Role Menu Permission</b></div>
+        <select id="roleSelect"></select>
+        <div id="rolePermList" class="meta"></div>
+        <button id="btnSaveRolePerm">Save Role Permission</button>
+      </div>
+      <div class="card">
+        <div class="meta"><b>User Menu Permission</b></div>
+        <select id="userSelect"></select>
+        <div id="userPermList" class="meta"></div>
+        <button id="btnSaveUserPerm">Save User Permission</button>
+      </div>
+      <div class="card">
+        <div class="meta"><b>Guide & Device Setting</b></div>
+        <button id="btnLoadServerConfig">Get Server Setting Otomatis</button>
+        <div id="serverConfigInfo" class="meta">Server config belum dimuat.</div>
+      </div>
+      <div class="card"><div id="status" class="meta">Ready.</div></div>
+    </div>
+    <script>
+      const SESSION_KEY = "poc_dispatch_session_v1";
+      let accessToken = "";
+      let GEOFENCES = [];
+      let rolePermState = { menuKeys: [], roles: {} };
+      let userPermState = { menuKeys: [], users: [] };
+      let me = null;
+      function s(t){ document.getElementById("status").textContent = t; }
+      function saved(){ try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (_e) { return null; } }
+      function toPtt() {
+        const ss = saved();
+        const userId = ss && ss.userId ? ss.userId : "supervisor";
+        const deviceId = ss && ss.deviceId ? ss.deviceId : "desk1";
+        location.href = `/dispatcher-ptt.html?userId=${encodeURIComponent(userId)}&deviceId=${encodeURIComponent(deviceId)}&channelId=engineering`;
+      }
+      async function api(path, options = {}) {
+        const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+        const res = await fetch(path, { ...options, headers });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
+        return data;
+      }
+      async function loginFromSession() {
+        const ss = saved();
+        if (!ss || !ss.userId || !ss.deviceId) { location.href = "/"; return; }
+        const data = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: ss.userId, deviceId: ss.deviceId }) });
+        const out = await data.json();
+        if (!data.ok) throw new Error(out.error || "login failed");
+        accessToken = out.accessToken || "";
+        me = out.user || null;
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId: ss.userId, deviceId: ss.deviceId, token: accessToken, role: me ? me.role : "" }));
+      }
+      function renderRolePermEditor() {
+        const role = document.getElementById("roleSelect").value;
+        const node = document.getElementById("rolePermList");
+        const p = (rolePermState.roles && rolePermState.roles[role]) || {};
+        node.innerHTML = rolePermState.menuKeys.map((k) => `<label><input type="checkbox" data-k="${k}" ${p[k] !== false ? "checked" : ""}/> ${k}</label>`).join("");
+      }
+      function renderUserPermEditor() {
+        const userId = document.getElementById("userSelect").value;
+        const node = document.getElementById("userPermList");
+        const user = userPermState.users.find((u) => u.userId === userId);
+        if (!user) { node.innerHTML = ""; return; }
+        node.innerHTML = userPermState.menuKeys.map((k) => {
+          const v = user.permissions[k];
+          return `<label>${k}<select data-k="${k}"><option value="inherit" ${v === null ? "selected" : ""}>inherit</option><option value="allow" ${v === true ? "selected" : ""}>allow</option><option value="deny" ${v === false ? "selected" : ""}>deny</option></select></label>`;
+        }).join("");
+      }
+      function populateGeofenceEditor() {
+        const sel = document.getElementById("geoSelect");
+        const old = sel.value;
+        sel.innerHTML = GEOFENCES.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+        if (GEOFENCES.some((g) => g.id === old)) sel.value = old;
+        const item = GEOFENCES.find((g) => g.id === sel.value);
+        if (item) document.getElementById("geoRadius").value = String(Math.round(item.radiusM));
+      }
+      document.getElementById("geoSelect").onchange = () => {
+        const item = GEOFENCES.find((g) => g.id === document.getElementById("geoSelect").value);
+        if (item) document.getElementById("geoRadius").value = String(Math.round(item.radiusM));
+      };
+      document.getElementById("geoRadius").onchange = () => {
+        const item = GEOFENCES.find((g) => g.id === document.getElementById("geoSelect").value);
+        if (item) item.radiusM = Number(document.getElementById("geoRadius").value) || item.radiusM;
+      };
+      document.getElementById("roleSelect").onchange = renderRolePermEditor;
+      document.getElementById("userSelect").onchange = renderUserPermEditor;
+      document.getElementById("btnSaveGeofences").onclick = async () => {
+        try { await api("/api/dispatch/geofences", { method: "PUT", body: JSON.stringify({ geofences: GEOFENCES }) }); s("Geofences saved."); } catch (e) { s(`Save geofence failed: ${e.message}`); }
+      };
+      document.getElementById("btnSaveRolePerm").onclick = async () => {
+        const role = document.getElementById("roleSelect").value;
+        const checks = document.querySelectorAll("#rolePermList input[type=checkbox]");
+        const p = {}; checks.forEach((c) => { p[c.dataset.k] = c.checked; });
+        try { await api(`/api/dispatch/admin/menu-permissions/roles/${encodeURIComponent(role)}`, { method: "PUT", body: JSON.stringify({ permissions: p }) }); s(`Role permission saved: ${role}`); } catch (e) { s(`Save role permission failed: ${e.message}`); }
+      };
+      document.getElementById("btnSaveUserPerm").onclick = async () => {
+        const userId = document.getElementById("userSelect").value;
+        const sels = document.querySelectorAll("#userPermList select[data-k]");
+        const p = {};
+        sels.forEach((x) => { p[x.dataset.k] = x.value === "inherit" ? null : x.value === "allow"; });
+        try { await api(`/api/dispatch/admin/menu-permissions/users/${encodeURIComponent(userId)}`, { method: "PUT", body: JSON.stringify({ permissions: p }) }); s(`User permission saved: ${userId}`); } catch (e) { s(`Save user permission failed: ${e.message}`); }
+      };
+      document.getElementById("btnLoadServerConfig").onclick = async () => {
+        try { const data = await fetch("/api/public/server-config").then((r) => r.json()); document.getElementById("serverConfigInfo").textContent = `HTTP: ${data.httpBaseUrl} | WS: ${data.wsUrl}`; s("Server setting loaded."); } catch (e) { s(`Get server setting failed: ${e.message}`); }
+      };
+      document.getElementById("btnToDispatcher").onclick = () => { location.href = "/dispatcher.html"; };
+      document.getElementById("btnToPtt").onclick = () => { toPtt(); };
+      document.getElementById("btnToAdmin").onclick = () => { location.href = "/admin.html"; };
+      document.getElementById("btnLogout").onclick = () => { localStorage.removeItem(SESSION_KEY); location.href = "/"; };
+      (async function boot() {
+        try {
+          await loginFromSession();
+          document.getElementById("who").textContent = `${me.userId} (${me.role})`;
+          if (me.role !== "admin") { s("Admin role required."); setTimeout(() => { location.href = "/dispatcher.html"; }, 900); return; }
+          const geo = await api("/api/dispatch/geofences");
+          GEOFENCES = Array.isArray(geo.geofences) ? geo.geofences : [];
+          populateGeofenceEditor();
+          rolePermState = await api("/api/dispatch/admin/menu-permissions/roles");
+          document.getElementById("roleSelect").innerHTML = Object.keys(rolePermState.roles || {}).sort().map((r) => `<option value="${r}">${r}</option>`).join("");
+          renderRolePermEditor();
+          userPermState = await api("/api/dispatch/admin/menu-permissions/users");
+          document.getElementById("userSelect").innerHTML = userPermState.users.map((u) => `<option value="${u.userId}">${u.userId} (${u.role})</option>`).join("");
+          renderUserPermEditor();
+          s("Ready.");
+        } catch (_e) {
+          localStorage.removeItem(SESSION_KEY);
+          location.href = "/";
+        }
+      })();
+    </script>
+  </body>
+</html>

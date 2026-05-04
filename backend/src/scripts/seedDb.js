@@ -20,7 +20,8 @@ async function run() {
       ('10000000-0000-0000-0000-000000000001', 'u1', 'Engineering User', 'operator'),
       ('10000000-0000-0000-0000-000000000002', 'hk1', 'Housekeeping User', 'operator'),
       ('10000000-0000-0000-0000-000000000003', 'sec1', 'Security User', 'operator'),
-      ('10000000-0000-0000-0000-000000000004', 'supervisor', 'Dispatcher Supervisor', 'dispatcher')
+      ('10000000-0000-0000-0000-000000000004', 'supervisor', 'Dispatcher Supervisor', 'dispatcher'),
+      ('10000000-0000-0000-0000-000000000005', 'admin1', 'System Admin', 'admin')
       ON CONFLICT (id) DO UPDATE
       SET username = EXCLUDED.username, display_name = EXCLUDED.display_name, role = EXCLUDED.role
     `);
@@ -30,7 +31,8 @@ async function run() {
       ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'd1', 'android'),
       ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'hk-device', 'android'),
       ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', 'sec-device', 'android'),
-      ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000004', 'desk1', 'web')
+      ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000004', 'desk1', 'web'),
+      ('20000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000005', 'admin-web', 'web')
       ON CONFLICT (id) DO UPDATE
       SET user_id = EXCLUDED.user_id, device_label = EXCLUDED.device_label, platform = EXCLUDED.platform
     `);

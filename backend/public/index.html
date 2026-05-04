@@ -3,230 +3,63 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PoC Server Console</title>
+    <title>PoC Login</title>
     <style>
-      :root {
-        --bg: #f2f5f8;
-        --card: #ffffff;
-        --text: #11212d;
-        --muted: #4d5b68;
-        --primary: #0f7b6c;
-        --primary-2: #0a5a50;
-        --danger: #b83a3a;
-        --border: #d7e0e8;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: "Segoe UI", Tahoma, sans-serif;
-        color: var(--text);
-        background:
-          radial-gradient(circle at 15% 15%, #dff3ee 0%, transparent 45%),
-          radial-gradient(circle at 85% 10%, #e3ecf9 0%, transparent 35%),
-          var(--bg);
-      }
-      .wrap {
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 24px 16px 48px;
-      }
-      h1 {
-        margin: 0 0 6px;
-        font-size: 28px;
-      }
-      .sub {
-        margin: 0 0 20px;
-        color: var(--muted);
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 12px;
-      }
-      .card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 14px;
-      }
-      .card h2 {
-        margin: 0 0 10px;
-        font-size: 16px;
-      }
-      label {
-        display: block;
-        margin: 8px 0 4px;
-        font-size: 13px;
-        color: var(--muted);
-      }
-      input, select, textarea {
-        width: 100%;
-        padding: 9px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        font-size: 14px;
-      }
-      button {
-        margin-top: 10px;
-        padding: 9px 12px;
-        border: 0;
-        border-radius: 8px;
-        background: var(--primary);
-        color: #fff;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      button:hover { background: var(--primary-2); }
-      .danger { background: var(--danger); }
-      .token {
-        font-family: Consolas, monospace;
-        font-size: 12px;
-        max-height: 64px;
-        overflow: auto;
-        background: #f7fbfc;
-        border: 1px dashed var(--border);
-        padding: 8px;
-        border-radius: 8px;
-      }
-      pre {
-        margin: 14px 0 0;
-        background: #0f1b23;
-        color: #d4e7f3;
-        border-radius: 10px;
-        padding: 12px;
-        font-size: 12px;
-        min-height: 140px;
-        overflow: auto;
-      }
+      :root { --bg:#08141d; --panel:#0f2230; --line:#2b4b60; --text:#e8f1f7; --muted:#9bb2c2; --accent:#28c6a8; }
+      * { box-sizing:border-box; }
+      body { margin:0; font-family:"Segoe UI",Tahoma,sans-serif; color:var(--text); background:var(--bg); display:flex; align-items:center; justify-content:center; min-height:100vh; }
+      .card { width:min(460px, calc(100vw - 24px)); background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; }
+      label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
+      input, button { width:100%; border:1px solid var(--line); border-radius:9px; padding:10px; font-size:14px; }
+      input { background:#102737; color:var(--text); }
+      button { margin-top:10px; background:linear-gradient(90deg,var(--accent),#2ea0cf); color:#04252f; font-weight:700; cursor:pointer; }
+      .meta { color:var(--muted); font-size:12px; margin-top:8px; }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <h1>PoC Server Console</h1>
-      <p class="sub">Quick browser UI to test auth, channels, and PTT floor control.</p>
-      <p class="sub"><a href="/dispatcher.html">Open Dispatcher Tracking Console</a></p>
-
-      <div class="grid">
-        <section class="card">
-          <h2>Health</h2>
-          <button id="btnHealth">Check /api/health</button>
-        </section>
-
-        <section class="card">
-          <h2>Login</h2>
-          <label for="userId">User ID</label>
-          <input id="userId" value="u1" />
-          <label for="deviceId">Device ID</label>
-          <input id="deviceId" value="d1" />
-          <button id="btnLogin">Login</button>
-          <label>Access Token</label>
-          <div class="token" id="tokenView">No token yet</div>
-        </section>
-
-        <section class="card">
-          <h2>Channels</h2>
-          <button id="btnChannels">Get /api/channels</button>
-        </section>
-
-        <section class="card">
-          <h2>PTT Floor</h2>
-          <label for="channelId">Channel</label>
-          <select id="channelId">
-            <option value="housekeeping">Housekeeping</option>
-            <option value="engineering" selected>Engineering</option>
-            <option value="security">Security</option>
-            <option value="all-call">All-Call</option>
-          </select>
-          <button id="btnRequest">Request Talk</button>
-          <button id="btnRelease" class="danger">Release Talk</button>
-          <button id="btnState">Get Floor State</button>
-          <button id="btnGpsHistory">Get PTT GPS History</button>
-        </section>
-      </div>
-
-      <pre id="output">Ready.</pre>
+    <div class="card">
+      <h2 style="margin:0;">Login</h2>
+      <div class="meta">Role-based landing otomatis: dispatcher/admin/operator.</div>
+      <label for="userId">User ID</label>
+      <input id="userId" value="supervisor" />
+      <label for="deviceId">Device ID</label>
+      <input id="deviceId" value="desk1" />
+      <button id="btnLogin">Login</button>
+      <div class="meta" id="status">Belum login.</div>
     </div>
-
     <script>
-      let accessToken = "";
-
-      function out(title, data) {
-        const node = document.getElementById("output");
-        node.textContent = `${title}\n${JSON.stringify(data, null, 2)}`;
+      const SESSION_KEY = "poc_dispatch_session_v1";
+      function setStatus(t) { document.getElementById("status").textContent = t; }
+      function goByRole(role, userId, deviceId, channelIds) {
+        if (role === "dispatcher") { location.href = "/dispatcher.html"; return; }
+        if (role === "admin") { location.href = "/admin.html"; return; }
+        const ch = Array.isArray(channelIds) && channelIds.length ? channelIds[0] : "engineering";
+        location.href = `/dispatcher-ptt.html?userId=${encodeURIComponent(userId)}&deviceId=${encodeURIComponent(deviceId)}&channelId=${encodeURIComponent(ch)}`;
       }
-
-      async function api(path, options = {}) {
-        const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-        const res = await fetch(path, { ...options, headers });
+      async function loginAndRoute(userId, deviceId) {
+        const res = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, deviceId }) });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw { status: res.status, data };
-        return data;
+        if (!res.ok) throw new Error(data.error || "login failed");
+        const role = data.user ? data.user.role : "";
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId, deviceId, token: data.accessToken || "", role }));
+        goByRole(role, userId, deviceId, data.user ? data.user.channelIds : []);
       }
-
-      document.getElementById("btnHealth").onclick = async () => {
-        try { out("Health OK", await api("/api/health", { headers: {} })); }
-        catch (e) { out("Health Error", e); }
-      };
-
       document.getElementById("btnLogin").onclick = async () => {
-        const userId = document.getElementById("userId").value.trim();
-        const deviceId = document.getElementById("deviceId").value.trim();
         try {
-          const data = await api("/api/auth/login", {
-            method: "POST",
-            body: JSON.stringify({ userId, deviceId })
-          });
-          accessToken = data.accessToken || "";
-          document.getElementById("tokenView").textContent = accessToken || "No token";
-          out("Login OK", { user: data.user, hasAccessToken: Boolean(data.accessToken) });
+          const userId = document.getElementById("userId").value.trim();
+          const deviceId = document.getElementById("deviceId").value.trim();
+          setStatus("Logging in...");
+          await loginAndRoute(userId, deviceId);
         } catch (e) {
-          out("Login Error", e);
+          setStatus(`Login gagal: ${e.message}`);
         }
       };
-
-      document.getElementById("btnChannels").onclick = async () => {
-        try { out("Channels", await api("/api/channels")); }
-        catch (e) { out("Channels Error", e); }
-      };
-
-      document.getElementById("btnRequest").onclick = async () => {
-        const channelId = document.getElementById("channelId").value;
-        const userId = document.getElementById("userId").value.trim();
-        try {
-          out("PTT Request", await api("/api/ptt/floor/request_talk", {
-            method: "POST",
-            body: JSON.stringify({ channelId, userId })
-          }));
-        } catch (e) {
-          out("PTT Request Error", e);
-        }
-      };
-
-      document.getElementById("btnRelease").onclick = async () => {
-        const channelId = document.getElementById("channelId").value;
-        const userId = document.getElementById("userId").value.trim();
-        try {
-          out("PTT Release", await api("/api/ptt/floor/release", {
-            method: "POST",
-            body: JSON.stringify({ channelId, userId })
-          }));
-        } catch (e) {
-          out("PTT Release Error", e);
-        }
-      };
-
-      document.getElementById("btnState").onclick = async () => {
-        const channelId = document.getElementById("channelId").value;
-        try { out("PTT State", await api(`/api/ptt/floor/state/${channelId}`)); }
-        catch (e) { out("PTT State Error", e); }
-      };
-
-      document.getElementById("btnGpsHistory").onclick = async () => {
-        const channelId = document.getElementById("channelId").value;
-        try { out("PTT GPS History", await api(`/api/ptt/floor/gps/history?channelId=${encodeURIComponent(channelId)}&limit=50`)); }
-        catch (e) { out("PTT GPS History Error", e); }
-      };
+      (async function autoBoot() {
+        let ss = null;
+        try { ss = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (_e) { ss = null; }
+        if (!ss || !ss.userId || !ss.deviceId) return;
+        try { await loginAndRoute(ss.userId, ss.deviceId); } catch (_e) {}
+      })();
     </script>
   </body>
 </html>

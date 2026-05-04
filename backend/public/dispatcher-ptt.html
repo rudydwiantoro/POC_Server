@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Dispatcher PTT</title>
+    <style>
+      :root {
+        --bg: #0b1822;
+        --panel: #122735;
+        --line: #2d4c61;
+        --text: #eaf3f9;
+        --muted: #9cb3c3;
+        --danger: #bf3b3b;
+        --talk: #2fb56d;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(circle at 20% 10%, rgba(47,181,109,.18), transparent 40%),
+          radial-gradient(circle at 90% 80%, rgba(43,141,196,.18), transparent 40%),
+          var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", Tahoma, sans-serif;
+      }
+      .card {
+        width: min(460px, calc(100vw - 20px));
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+        text-align: center;
+      }
+      .head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+      .nav-mini { display:flex; gap:6px; align-items:center; }
+      h1 { margin: 0; font-size: 20px; letter-spacing: .4px; }
+      .meta { margin-top: 6px; color: var(--muted); font-size: 13px; }
+      #pttBtn {
+        margin: 18px auto 10px;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        border: 3px solid #ffffff22;
+        background: radial-gradient(circle at 30% 30%, #dc5e5e, var(--danger));
+        color: #fff;
+        font-weight: 800;
+        font-size: 24px;
+        letter-spacing: .8px;
+        user-select: none;
+        touch-action: none;
+      }
+      #pttBtn.active {
+        background: radial-gradient(circle at 30% 30%, #56d98e, var(--talk));
+      }
+      #status { font-weight: 700; margin-top: 8px; }
+      .small { margin-top: 6px; color: var(--muted); font-size: 12px; }
+      audio { width: 100%; margin-top: 10px; }
+      #btnLogout {
+        width: auto;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #173346;
+        color: var(--text);
+      }
+      .nav-mini button {
+        width: auto;
+        padding: 7px 9px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #173346;
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="head">
+        <h1>Dispatcher PTT</h1>
+        <div class="nav-mini">
+          <button id="btnToDispatcher">Dispatcher</button>
+          <button id="btnToAdmin" style="display:none;">Admin</button>
+          <button id="btnLogout">Logout</button>
+        </div>
+      </div>
+      <div class="meta" id="identity">Loading identity...</div>
+      <button id="pttBtn" disabled>HOLD</button>
+      <div id="status">Status: connecting...</div>
+      <div class="small" id="chanInfo">Channel: -</div>
+      <audio id="remoteAudio" autoplay playsinline controls></audio>
+    </div>
+    <script>
+      const state = {
+        token: "",
+        ws: null,
+        pc: null,
+        localStream: null,
+        localTrack: null,
+        outboundTrack: null,
+        remoteUserId: null,
+        userId: "",
+        deviceId: "",
+        channelId: "",
+        joined: false,
+        floorGranted: false
+      };
+      const SESSION_KEY = "poc_dispatch_session_v1";
+      let currentRole = "";
+
+      const pttBtn = document.getElementById("pttBtn");
+      const statusEl = document.getElementById("status");
+      const identityEl = document.getElementById("identity");
+      const chanInfoEl = document.getElementById("chanInfo");
+      const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+      function setStatus(text) {
+        statusEl.textContent = `Status: ${text}`;
+      }
+
+      function sendWs(payload) {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+        state.ws.send(JSON.stringify(payload));
+      }
+
+      async function login() {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: state.userId, deviceId: state.deviceId })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "login failed");
+        state.token = data.accessToken;
+        currentRole = data.user ? data.user.role : "";
+        document.getElementById("btnToAdmin").style.display = currentRole === "admin" ? "inline-block" : "none";
+      }
+
+      async function createPeerConnection() {
+        if (state.pc) return state.pc;
+        state.pc = new RTCPeerConnection(iceConfig);
+        state.pc.onicecandidate = (event) => {
+          if (!event.candidate || !state.remoteUserId) return;
+          sendWs({ type: "webrtc_ice", toUserId: state.remoteUserId, candidate: event.candidate });
+        };
+        state.pc.ontrack = (event) => {
+          document.getElementById("remoteAudio").srcObject = event.streams[0];
+        };
+        return state.pc;
+      }
+
+      async function setupLocalAudio() {
+        if (state.localStream) return;
+        const raw = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        state.localTrack = raw.getAudioTracks()[0];
+        state.localTrack.enabled = false;
+        state.localStream = new MediaStream([state.localTrack]);
+        state.outboundTrack = state.localTrack;
+        const pc = await createPeerConnection();
+        state.localStream.getTracks().forEach((t) => pc.addTrack(t, state.localStream));
+      }
+
+      async function makeOffer(toUserId) {
+        state.remoteUserId = toUserId;
+        const pc = await createPeerConnection();
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        sendWs({ type: "webrtc_offer", toUserId, sdp: offer });
+      }
+
+      async function handleOffer(fromUserId, sdp) {
+        state.remoteUserId = fromUserId;
+        const pc = await createPeerConnection();
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendWs({ type: "webrtc_answer", toUserId: fromUserId, sdp: answer });
+      }
+
+      function setTrackEnabled(enabled) {
+        state.floorGranted = enabled;
+        if (state.outboundTrack) state.outboundTrack.enabled = enabled;
+        pttBtn.classList.toggle("active", enabled);
+        setStatus(enabled ? "talking" : "connected");
+      }
+
+      async function requestTalk() {
+        if (!state.joined) return;
+        sendWs({
+          type: "request_talk",
+          userId: state.userId,
+          deviceId: state.deviceId,
+          channelId: state.channelId
+        });
+      }
+
+      function releaseTalk() {
+        if (!state.joined) return;
+        sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
+      }
+
+      async function connectVoice() {
+        await login();
+        await setupLocalAudio();
+        state.ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/signaling`);
+        state.ws.onopen = () => {
+          sendWs({ type: "join_channel", userId: state.userId, channelId: state.channelId });
+          sendWs({ type: "floor_state", channelId: state.channelId });
+          state.joined = true;
+          pttBtn.disabled = false;
+          setStatus("connected");
+        };
+        state.ws.onmessage = async (event) => {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "peer_joined" && msg.userId !== state.userId) {
+            if (state.userId < msg.userId) await makeOffer(msg.userId);
+          } else if (msg.type === "join_ack") {
+            const peers = Array.isArray(msg.peers) ? msg.peers : [];
+            for (const peerId of peers) {
+              if (peerId === state.userId) continue;
+              if (state.userId < peerId) await makeOffer(peerId);
+            }
+          } else if (msg.type === "webrtc_offer" && msg.fromUserId !== state.userId) {
+            await handleOffer(msg.fromUserId, msg.sdp);
+          } else if (msg.type === "webrtc_answer" && msg.fromUserId === state.remoteUserId) {
+            const pc = await createPeerConnection();
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+          } else if (msg.type === "webrtc_ice" && msg.fromUserId === state.remoteUserId && msg.candidate) {
+            const pc = await createPeerConnection();
+            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          } else if (msg.type === "floor_granted") {
+            const mine = msg.holder && msg.holder.userId === state.userId;
+            setTrackEnabled(Boolean(mine));
+          } else if (msg.type === "floor_released") {
+            setTrackEnabled(false);
+          } else if (msg.type === "floor_busy" || msg.type === "floor_state") {
+            const mine = msg.holder && msg.holder.userId === state.userId;
+            setTrackEnabled(Boolean(mine));
+          }
+        };
+        state.ws.onclose = () => {
+          state.joined = false;
+          pttBtn.disabled = true;
+          setTrackEnabled(false);
+          setStatus("disconnected");
+        };
+      }
+
+      function bootIdentity() {
+        const params = new URLSearchParams(location.search);
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (_e) { saved = null; }
+        state.userId = params.get("userId") || (saved && saved.userId) || "supervisor";
+        state.deviceId = params.get("deviceId") || (saved && saved.deviceId) || "desk1";
+        state.channelId = params.get("channelId") || "engineering";
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ userId: state.userId, deviceId: state.deviceId, token: (saved && saved.token) || "" }));
+        identityEl.textContent = `${state.userId} / ${state.deviceId}`;
+        chanInfoEl.textContent = `Channel: ${state.channelId}`;
+      }
+
+      pttBtn.onmousedown = () => requestTalk();
+      pttBtn.onmouseup = () => releaseTalk();
+      pttBtn.onmouseleave = () => { if (state.floorGranted) releaseTalk(); };
+      pttBtn.ontouchstart = (e) => { e.preventDefault(); requestTalk(); };
+      pttBtn.ontouchend = (e) => { e.preventDefault(); releaseTalk(); };
+      document.getElementById("btnLogout").onclick = () => {
+        localStorage.removeItem(SESSION_KEY);
+        location.href = "/";
+      };
+      document.getElementById("btnToDispatcher").onclick = () => {
+        location.href = "/dispatcher.html";
+      };
+      document.getElementById("btnToAdmin").onclick = () => {
+        location.href = "/admin.html";
+      };
+
+      bootIdentity();
+      connectVoice().catch((e) => {
+        if (String(e.message || "").toLowerCase().includes("login")) {
+          localStorage.removeItem(SESSION_KEY);
+          location.href = "/";
+          return;
+        }
+        setStatus(`error: ${e.message}`);
+      });
+    </script>
+  </body>
+</html>

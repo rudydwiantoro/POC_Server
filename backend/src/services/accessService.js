@@ -30,7 +30,7 @@ async function getUserByUsername(username) {
 }
 
 async function getAllowedChannelsForUser(userId, role) {
-  if (role === "dispatcher") {
+  if (role === "dispatcher" || role === "admin") {
     const { rows } = await pool.query(
       "SELECT code FROM channels ORDER BY code ASC"
     );
@@ -49,7 +49,7 @@ async function getAllowedChannelsForUser(userId, role) {
 }
 
 async function canAccessChannel(userId, role, channelCode) {
-  if (role === "dispatcher") return true;
+  if (role === "dispatcher" || role === "admin") return true;
   const sql = `
     SELECT 1
     FROM channel_members cm
@@ -62,7 +62,7 @@ async function canAccessChannel(userId, role, channelCode) {
 }
 
 async function getVisibleChannels(userId, role) {
-  if (role === "dispatcher") {
+  if (role === "dispatcher" || role === "admin") {
     const { rows } = await pool.query(
       "SELECT code, name, is_emergency FROM channels ORDER BY code ASC"
     );
@@ -81,7 +81,7 @@ async function getVisibleChannels(userId, role) {
 }
 
 function canEmergencyOverride(role) {
-  return role === "dispatcher";
+  return role === "dispatcher" || role === "admin";
 }
 
 module.exports = {

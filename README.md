@@ -133,13 +133,13 @@ Jika upgrade dari schema lama:
 cd backend
 npm run init-db
 ```
+`init-db` sekarang otomatis menjalankan:
+- `sql/001_init_schema.sql`
+- seluruh file `sql/migrations/*.sql` (urut nama file)
 
-Atau jika ingin migration terpisah untuk DB existing:
+Lanjutkan dengan:
 ```bash
-psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/002_add_ptt_text_messages.sql
-psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/003_add_ptt_image_messages.sql
-psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/004_add_device_beacon_settings.sql
-psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/005_add_beacon_mode_batch_settings.sql
+npm run seed-db
 ```
 
 ## Operation Manual

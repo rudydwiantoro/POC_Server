@@ -34,6 +34,21 @@ function verifyLicenseKey(licenseKey) {
   return parsed;
 }
 
+function verifyDeviceActivationKey(deviceKey) {
+  const parts = String(deviceKey || "").split(".");
+  if (parts.length !== 2) throw new Error("invalid_device_key_format");
+  const [payloadB64, sig] = parts;
+  const secret = getLicenseSecret();
+  const expected = crypto.createHmac("sha256", secret).update(payloadB64).digest("base64url");
+  if (sig !== expected) throw new Error("invalid_device_key_signature");
+  const parsed = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8"));
+  if (!parsed || !parsed.deviceId || !parsed.clientKey) throw new Error("invalid_device_key_payload");
+  if (licenseClientKey && String(parsed.clientKey) !== String(licenseClientKey)) {
+    throw new Error("device_key_client_mismatch");
+  }
+  return parsed;
+}
+
 async function getCurrentLicense() {
   const { rows } = await pool.query("SELECT * FROM server_license WHERE id = 1 LIMIT 1");
   return rows[0] || null;
@@ -93,4 +108,4 @@ async function assertLicenseActive() {
   return st;
 }
 
-module.exports = { signPayload, verifyLicenseKey, setLicenseKey, getLicenseStatus, assertLicenseActive };
+module.exports = { signPayload, verifyLicenseKey, verifyDeviceActivationKey, setLicenseKey, getLicenseStatus, assertLicenseActive };

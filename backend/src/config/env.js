@@ -5,6 +5,8 @@ dotenv.config();
 module.exports = {
   port: Number(process.env.PORT || 3100),
   jwtSecret: process.env.JWT_SECRET || "replace_me_in_dev",
+  generatorAdminUser: process.env.GENERATOR_ADMIN_USER || "superadmin",
+  generatorAdminPass: process.env.GENERATOR_ADMIN_PASS || "superadmin123",
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "",
   companyName: process.env.COMPANY_NAME || "Unlicensed Company",
   serverName: process.env.SERVER_NAME || "PoC Server",

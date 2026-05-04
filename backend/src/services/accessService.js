@@ -140,6 +140,28 @@ module.exports = {
   canAccessChannel,
   getVisibleChannels,
   canEmergencyOverride,
+  async activateDeviceForUser(username, deviceLabel, platform = "android") {
+    const existing = await getUserWithDevice(username, deviceLabel);
+    if (existing) return existing;
+    const user = await getUserByUsername(username);
+    if (!user) return null;
+    const newDevId = crypto.randomUUID();
+    const { rows } = await pool.query(
+      `
+      INSERT INTO devices (id, user_id, device_label, platform)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id AS device_id, device_label
+      `,
+      [newDevId, user.user_id, deviceLabel, platform]
+    );
+    return {
+      user_id: user.user_id,
+      username: user.username,
+      role: user.role,
+      device_id: rows[0].device_id,
+      device_label: rows[0].device_label
+    };
+  },
   async getDeviceBeaconSetting(deviceDbId) {
     const { rows } = await pool.query(
       `

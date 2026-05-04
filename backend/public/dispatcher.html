@@ -294,6 +294,14 @@
           <label for="licenseKeyInput">License Key</label>
           <textarea id="licenseKeyInput" rows="3" placeholder="Paste license key here"></textarea>
           <button id="btnSaveLicense">Save License Key</button>
+          <div class="meta" style="margin-top:12px;"><b>Device Activation</b></div>
+          <label for="activateUserId">User ID</label>
+          <input id="activateUserId" placeholder="mis. u1" />
+          <label for="activateDeviceId">Device ID</label>
+          <input id="activateDeviceId" placeholder="mis. d1-new" />
+          <label for="activateDeviceKey">Device Key</label>
+          <textarea id="activateDeviceKey" rows="3" placeholder="Paste device key here"></textarea>
+          <button id="btnActivateDevice">Activate Device</button>
         </div>
         <div class="box">
           <div class="meta"><b>Guide & Device Setting</b></div>
@@ -1120,6 +1128,25 @@
           setText("mapInfo", "License key saved.");
         } catch (e) {
           setText("mapInfo", `Save license failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnActivateDevice").onclick = async () => {
+        const userId = document.getElementById("activateUserId").value.trim();
+        const deviceId = document.getElementById("activateDeviceId").value.trim();
+        const deviceKey = document.getElementById("activateDeviceKey").value.trim();
+        if (!userId || !deviceId || !deviceKey) {
+          setText("mapInfo", "User ID, Device ID, Device Key wajib diisi.");
+          return;
+        }
+        try {
+          await api("/api/dispatch/admin/devices/activate", {
+            method: "POST",
+            body: JSON.stringify({ userId, deviceId, deviceKey, platform: "android" })
+          });
+          setText("mapInfo", `Device activated: ${userId}/${deviceId}`);
+          if (permissions.emergency_override) await loadDeviceBeaconAdmin();
+        } catch (e) {
+          setText("mapInfo", `Activate device failed: ${e.message}`);
         }
       };
       document.getElementById("btnAboutDispatcher").onclick = async () => {

@@ -3,12 +3,13 @@ const {
   canEmergencyOverride,
   getVisibleChannels,
   listDevicesForAdmin,
-  updateDeviceBeaconSetting
+  updateDeviceBeaconSetting,
+  activateDeviceForUser
 } = require("../services/accessService");
 const { pool } = require("../db/pool");
 const { getUserPttMessages } = require("../services/pttMessageService");
 const { getUserPttImages } = require("../services/pttImageService");
-const { getLicenseStatus, setLicenseKey } = require("../services/licenseService");
+const { getLicenseStatus, setLicenseKey, verifyDeviceActivationKey } = require("../services/licenseService");
 
 const router = express.Router();
 const MENU_KEYS = [
@@ -71,6 +72,29 @@ router.put("/admin/license", async (req, res) => {
     return res.json({ success: true, license: saved });
   } catch (error) {
     return res.status(400).json({ error: error.message || "invalid license key" });
+  }
+});
+
+router.post("/admin/devices/activate", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    const userId = req.body && req.body.userId ? String(req.body.userId).trim() : "";
+    const deviceId = req.body && req.body.deviceId ? String(req.body.deviceId).trim() : "";
+    const deviceKey = req.body && req.body.deviceKey ? String(req.body.deviceKey).trim() : "";
+    const platform = req.body && req.body.platform ? String(req.body.platform).trim() : "android";
+    if (!userId || !deviceId || !deviceKey) {
+      return res.status(400).json({ error: "userId, deviceId, deviceKey are required" });
+    }
+    const parsed = verifyDeviceActivationKey(deviceKey);
+    if (String(parsed.userId || "") !== userId) return res.status(400).json({ error: "device_key_user_mismatch" });
+    if (String(parsed.deviceId || "") !== deviceId) return res.status(400).json({ error: "device_key_device_mismatch" });
+    const activated = await activateDeviceForUser(userId, deviceId, platform);
+    if (!activated) return res.status(404).json({ error: "user_not_found" });
+    return res.json({ success: true, activated: { userId, deviceId, platform } });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "invalid_device_key" });
   }
 });
 

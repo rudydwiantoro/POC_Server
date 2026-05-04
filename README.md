@@ -96,8 +96,14 @@ Dispatch:
 - `POST /api/dispatch/emergency/override`
 - `GET /api/dispatch/admin/license`
 - `PUT /api/dispatch/admin/license`
+- `POST /api/dispatch/admin/devices/activate`
 - `GET /api/dispatch/staff/:userId/messages?limit=<n>`
 - `GET /api/dispatch/staff/:userId/messages?limit=<n>&channelId=<id>&from=<iso>&to=<iso>`
+
+Generator:
+- `POST /api/generator/login`
+- `POST /api/generator/generate/server-key`
+- `POST /api/generator/generate/device-key`
 
 Public config:
 - `GET /api/public/server-config` (untuk auto-fetch HTTP Base URL + WS URL dari APK/dispatcher guide)
@@ -176,6 +182,16 @@ npm run seed-db
 External generator tersedia di:
 - CLI: `tools/license-generator/generate-license.js`
 - Panel HTML: `tools/license-generator/license-generator.html`
+- Superadmin Panel UI: `tools/license-generator/index.html`
+- Hosted UI dari server: `http://localhost:3100/license-generator.html`
+
+Credential superadmin generator (di `.env` backend):
+- `GENERATOR_ADMIN_USER`
+- `GENERATOR_ADMIN_PASS`
+
+Aktivasi device dari dispatcher:
+- isi `userId`, `deviceId`, `deviceKey` di panel `About & License -> Device Activation`
+- klik `Activate Device`
 
 Contoh generate (external app / machine admin):
 ```bash

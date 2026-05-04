@@ -6,6 +6,12 @@ module.exports = {
   port: Number(process.env.PORT || 3100),
   jwtSecret: process.env.JWT_SECRET || "replace_me_in_dev",
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "",
+  companyName: process.env.COMPANY_NAME || "Unlicensed Company",
+  serverName: process.env.SERVER_NAME || "PoC Server",
+  serverInstanceCount: Number(process.env.SERVER_INSTANCE_COUNT || 1),
+  licenseParamA: process.env.LICENSE_PARAM_A || "A",
+  licenseParamB: process.env.LICENSE_PARAM_B || "B",
+  licenseParamC: process.env.LICENSE_PARAM_C || "C",
   db: {
     host: process.env.DB_HOST || "localhost",
     port: Number(process.env.DB_PORT || 5432),

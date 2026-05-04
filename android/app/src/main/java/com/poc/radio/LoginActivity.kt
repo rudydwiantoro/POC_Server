@@ -23,6 +23,7 @@ class LoginActivity : AppCompatActivity() {
 
         etUserId.setText(AppConfig.userId(this))
         etDeviceId.setText(AppConfig.deviceId(this))
+        etDeviceId.isEnabled = false
         tvServerInfo.text = "Server: ${AppConfig.httpBaseUrl(this)}"
 
         btnConfig.setOnClickListener {

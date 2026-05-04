@@ -10,6 +10,7 @@ import org.json.JSONObject
 class SignalingClient(
     private val wsUrl: String,
     private val userId: String,
+    private val deviceId: String,
     private val channelIdProvider: () -> String,
     private val callback: Callback
 ) {
@@ -103,6 +104,7 @@ class SignalingClient(
             JSONObject()
                 .put("type", "join_channel")
                 .put("userId", userId)
+                .put("deviceId", deviceId)
                 .put("channelId", channelId)
                 .toString()
         )

@@ -268,6 +268,13 @@
           <button id="btnShowRoute">Show Route</button>
         </div>
         <div class="box">
+          <div class="meta"><b>About & License</b></div>
+          <div id="aboutInfo" class="small">About belum dimuat.</div>
+          <label for="licenseKeyInput">License Key</label>
+          <textarea id="licenseKeyInput" rows="3" placeholder="Paste license key here"></textarea>
+          <button id="btnSaveLicense">Save License Key</button>
+        </div>
+        <div class="box">
           <div class="meta"><b>Guide & Device Setting</b></div>
           <div class="small">
             Untuk user baru install APK:
@@ -389,7 +396,14 @@
         }
         if (permissions.emergency_override) {
           await loadDeviceBeaconAdmin();
+          await loadLicenseInfo();
         }
+      }
+
+      async function loadLicenseInfo() {
+        const data = await api("/api/dispatch/admin/license");
+        const txt = `Company: ${data.companyName || "-"} | Server: ${data.serverName || "-"} | Exp: ${data.expiresAt || "-"} | Active: ${data.active ? "yes" : "no"}`;
+        document.getElementById("aboutInfo").textContent = txt;
       }
 
       function applyMenuVisibility() {
@@ -1055,6 +1069,23 @@
       };
       document.getElementById("btnCopyConfigJson").onclick = () => {
         copyText(autoServerConfig ? JSON.stringify(autoServerConfig, null, 2) : "", "Config JSON");
+      };
+      document.getElementById("btnSaveLicense").onclick = async () => {
+        const licenseKey = document.getElementById("licenseKeyInput").value.trim();
+        if (!licenseKey) {
+          setText("mapInfo", "License key wajib diisi.");
+          return;
+        }
+        try {
+          await api("/api/dispatch/admin/license", {
+            method: "PUT",
+            body: JSON.stringify({ licenseKey })
+          });
+          await loadLicenseInfo();
+          setText("mapInfo", "License key saved.");
+        } catch (e) {
+          setText("mapInfo", `Save license failed: ${e.message}`);
+        }
       };
       document.getElementById("beaconDeviceSelect").onchange = onBeaconDeviceSelected;
       document.getElementById("btnSaveBeaconSetting").onclick = () => {

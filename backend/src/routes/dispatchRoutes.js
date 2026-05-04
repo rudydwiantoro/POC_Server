@@ -8,6 +8,7 @@ const {
 const { pool } = require("../db/pool");
 const { getUserPttMessages } = require("../services/pttMessageService");
 const { getUserPttImages } = require("../services/pttImageService");
+const { getLicenseStatus, setLicenseKey } = require("../services/licenseService");
 
 const router = express.Router();
 const MENU_KEYS = [
@@ -29,6 +30,47 @@ router.get("/overview", async (req, res) => {
     });
   } catch (_error) {
     return res.status(500).json({ error: "failed to load dispatch overview" });
+  }
+});
+
+router.get("/about", async (req, res) => {
+  try {
+    const lic = await getLicenseStatus();
+    return res.json({
+      companyName: lic.companyName || "-",
+      serverName: lic.serverName || "-",
+      expiresAt: lic.expiresAt || null,
+      active: Boolean(lic.active),
+      deviceId: req.auth.deviceId,
+      userId: req.auth.userId
+    });
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to load about info" });
+  }
+});
+
+router.get("/admin/license", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    return res.json(await getLicenseStatus());
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to load license" });
+  }
+});
+
+router.put("/admin/license", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    const key = req.body && req.body.licenseKey ? String(req.body.licenseKey) : "";
+    if (!key) return res.status(400).json({ error: "licenseKey is required" });
+    const saved = await setLicenseKey(key);
+    return res.json({ success: true, license: saved });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "invalid license key" });
   }
 });
 

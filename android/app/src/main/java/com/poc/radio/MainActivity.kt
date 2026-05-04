@@ -35,6 +35,7 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
     private lateinit var etPhotoNote: EditText
     private lateinit var btnTakePhoto: ImageButton
     private lateinit var btnOpenHistory: Button
+    private lateinit var btnAbout: ImageButton
     private lateinit var tvMiniDisplay: TextView
     private lateinit var tvFloorStatus: TextView
     private lateinit var tvSignalStatus: TextView
@@ -63,6 +64,7 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
         etPhotoNote = findViewById(R.id.etPhotoNote)
         btnTakePhoto = findViewById(R.id.btnTakePhoto)
         btnOpenHistory = findViewById(R.id.btnOpenHistory)
+        btnAbout = findViewById(R.id.btnAbout)
         tvMiniDisplay = findViewById(R.id.tvMiniDisplay)
         tvFloorStatus = findViewById(R.id.tvFloorStatus)
         tvSignalStatus = findViewById(R.id.tvSignalStatus)
@@ -116,6 +118,7 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
         }
         btnTakePhoto.setOnClickListener { takePictureLauncher.launch(null) }
         btnOpenHistory.setOnClickListener { startActivity(Intent(this, HistoryActivity::class.java)) }
+        btnAbout.setOnClickListener { showAboutDialog() }
     }
 
     private fun connectSignaling() {
@@ -123,6 +126,7 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
         signalingClient = SignalingClient(
             wsUrl = AppConfig.wsUrl(this),
             userId = AppConfig.userId(this),
+            deviceId = AppConfig.deviceId(this),
             channelIdProvider = { selectedChannel() },
             callback = this
         ).also { it.connect() }
@@ -257,5 +261,29 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
                 .put("longitude", loc.longitude)
                 .put("accuracyM", loc.accuracy.toDouble())
         }.getOrNull()
+    }
+
+    private fun showAboutDialog() {
+        val token = AppConfig.token(this)
+        if (token.isBlank()) return
+        thread {
+            val about = apiClient.getAbout(token)
+            runOnUiThread {
+                about.onSuccess {
+                    androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("About")
+                        .setMessage(
+                            "Company: ${it.companyName}\n" +
+                                "Server: ${it.serverName}\n" +
+                                "Device: ${it.deviceId}\n" +
+                                "License Expiry: ${it.expiresAt ?: "-"}"
+                        )
+                        .setPositiveButton("OK", null)
+                        .show()
+                }.onFailure {
+                    tvSignalStatus.text = "Signal: about unavailable"
+                }
+            }
+        }
     }
 }

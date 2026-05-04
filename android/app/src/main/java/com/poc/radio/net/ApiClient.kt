@@ -32,6 +32,12 @@ class ApiClient(
     data class VoiceHistory(val channelId: String, val audioUrl: String, val createdAt: String)
     data class ImageHistory(val channelId: String, val imageUrl: String, val noteText: String, val createdAt: String)
     data class MyHistory(val voice: List<VoiceHistory>, val images: List<ImageHistory>)
+    data class AboutInfo(
+        val companyName: String,
+        val serverName: String,
+        val expiresAt: String?,
+        val deviceId: String
+    )
 
     fun login(userId: String, deviceId: String): Result<LoginResult> = runCatching {
         val payload = JSONObject()
@@ -173,5 +179,24 @@ class ApiClient(
     fun openImageInBrowser(context: Context, imageUrl: String) {
         val u = if (imageUrl.startsWith("http")) imageUrl else "${baseUrl.removeSuffix("/")}$imageUrl"
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+    }
+
+    fun getAbout(accessToken: String): Result<AboutInfo> = runCatching {
+        val req = Request.Builder()
+            .url("$baseUrl/api/dispatch/about")
+            .get()
+            .addHeader("Authorization", "Bearer $accessToken")
+            .build()
+        httpClient.newCall(req).execute().use { resp ->
+            val body = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) error("About failed (${resp.code}): $body")
+            val root = JSONObject(body)
+            AboutInfo(
+                companyName = root.optString("companyName", "-"),
+                serverName = root.optString("serverName", "-"),
+                expiresAt = if (root.isNull("expiresAt")) null else root.optString("expiresAt"),
+                deviceId = root.optString("deviceId", "-")
+            )
+        }
     }
 }

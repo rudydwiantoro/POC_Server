@@ -8,7 +8,8 @@
     "dev": "node src/server.js",
     "start": "node src/server.js",
     "init-db": "node src/scripts/initDb.js",
-    "seed-db": "node src/scripts/seedDb.js"
+    "seed-db": "node src/scripts/seedDb.js",
+    "gen-license": "node src/scripts/generateLicenseKey.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

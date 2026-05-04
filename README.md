@@ -77,6 +77,7 @@ Location:
 - `GET /api/location/history/:deviceId?from=<iso>&to=<iso>&limit=<n>`
 
 Dispatch:
+- `GET /api/dispatch/about`
 - `GET /api/dispatch/overview`
 - `GET /api/dispatch/tracking/overview`
 - `GET /api/dispatch/tracking/route?deviceId=<id>&from=<iso>&to=<iso>&limit=<n>`
@@ -92,6 +93,8 @@ Dispatch:
   - payload supports: `enabled`, `intervalMin`, `distanceKm`, `mode` (`normal|eco`),
     `batchSize`, `batchMaxWaitMin`, `normalSendMin`
 - `POST /api/dispatch/emergency/override`
+- `GET /api/dispatch/admin/license`
+- `PUT /api/dispatch/admin/license`
 - `GET /api/dispatch/staff/:userId/messages?limit=<n>`
 - `GET /api/dispatch/staff/:userId/messages?limit=<n>&channelId=<id>&from=<iso>&to=<iso>`
 
@@ -140,6 +143,26 @@ npm run init-db
 Lanjutkan dengan:
 ```bash
 npm run seed-db
+```
+
+## License Key
+- License di-set dari admin panel (dispatcher), bukan dari mobile.
+- Validasi key menggunakan signature HMAC dengan 3 parameter unik dari env:
+  - `LICENSE_PARAM_A`
+  - `LICENSE_PARAM_B`
+  - `LICENSE_PARAM_C`
+- Key juga membawa:
+  - `companyName`
+  - `serverName`
+  - `maxServers`
+  - `maxDevices`
+  - `maxOnlineDevices`
+  - `expiresAt`
+
+Generate key (offline/admin side):
+```bash
+cd backend
+npm run gen-license -- --company=MyCo --server=MyServer --maxServers=1 --maxDevices=300 --maxOnline=120 --expiresAt=2030-12-31T23:59:59Z
 ```
 
 ## Operation Manual

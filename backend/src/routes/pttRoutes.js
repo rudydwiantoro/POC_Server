@@ -2,6 +2,7 @@ const express = require("express");
 const { canAccessChannel } = require("../services/accessService");
 const { getActiveHolder, requestTalk, releaseTalk, getPttGpsHistory } = require("../services/pttSessionService");
 const { savePttMessage } = require("../services/pttMessageService");
+const { savePttTextMessage, getLatestPttTextMessage } = require("../services/pttTextService");
 
 const router = express.Router();
 
@@ -120,6 +121,53 @@ router.post("/messages/upload", async (req, res) => {
       return res.status(404).json({ error: "channel not found" });
     }
     return res.status(500).json({ error: "failed to upload ptt message" });
+  }
+});
+
+router.post("/messages/text", async (req, res) => {
+  try {
+    const { userId, channelId, text } = req.body || {};
+    if (!userId || !channelId || !text) {
+      return res.status(400).json({ error: "userId, channelId, text are required" });
+    }
+    if (req.auth.userId !== userId) {
+      return res.status(403).json({ error: "token userId does not match request userId" });
+    }
+    const allowed = await canAccessChannel(req.auth.userDbId, req.auth.role, channelId);
+    if (!allowed) {
+      return res.status(403).json({ error: "no access to this channel" });
+    }
+    const saved = await savePttTextMessage({
+      userDbId: req.auth.userDbId,
+      channelCode: channelId,
+      messageText: text
+    });
+    return res.json({ success: true, message: saved });
+  } catch (error) {
+    if (error.message === "message_empty" || error.message === "message_too_long") {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.message === "channel_not_found") {
+      return res.status(404).json({ error: "channel not found" });
+    }
+    return res.status(500).json({ error: "failed to save text message" });
+  }
+});
+
+router.get("/messages/text/latest", async (req, res) => {
+  try {
+    const channelId = req.query.channelId ? String(req.query.channelId) : "";
+    if (!channelId) {
+      return res.status(400).json({ error: "channelId is required" });
+    }
+    const allowed = await canAccessChannel(req.auth.userDbId, req.auth.role, channelId);
+    if (!allowed) {
+      return res.status(403).json({ error: "no access to this channel" });
+    }
+    const message = await getLatestPttTextMessage({ channelCode: channelId });
+    return res.json({ message });
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to load latest text message" });
   }
 });
 

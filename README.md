@@ -67,6 +67,8 @@ Channels/PTT:
 - `GET /api/ptt/floor/state/:channelId`
 - `GET /api/ptt/floor/gps/history?channelId=<id>&limit=<n>`
 - `POST /api/ptt/floor/messages/upload`
+- `POST /api/ptt/floor/messages/text`
+- `GET /api/ptt/floor/messages/text/latest?channelId=<id>`
 
 Location:
 - `POST /api/location/update`
@@ -116,11 +118,17 @@ Additional tables:
 - `role_menu_permissions`
 - `user_menu_permissions`
 - `ptt_messages`
+- `ptt_text_messages`
 
 Jika upgrade dari schema lama:
 ```bash
 cd backend
 npm run init-db
+```
+
+Atau jika ingin migration terpisah untuk DB existing:
+```bash
+psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/002_add_ptt_text_messages.sql
 ```
 
 ## Operation Manual

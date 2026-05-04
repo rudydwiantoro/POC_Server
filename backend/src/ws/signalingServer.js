@@ -1,6 +1,7 @@
 const WebSocket = require("ws");
 const { getActiveHolder, requestTalk, releaseTalk } = require("../services/pttSessionService");
-const { getUserByUsername, getUserWithDevice } = require("../services/accessService");
+const { canAccessChannel, getUserByUsername, getUserWithDevice } = require("../services/accessService");
+const { savePttTextMessage } = require("../services/pttTextService");
 
 function send(ws, payload) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -115,6 +116,45 @@ function createSignalingServer(httpServer) {
         if (msg.type === "floor_state") {
           const holder = await getActiveHolder(msg.channelId);
           send(ws, { type: "floor_state", channelId: msg.channelId, holder });
+          return;
+        }
+
+        if (msg.type === "ptt_text") {
+          const text = String(msg.text || "").trim();
+          if (!state.channelId || !state.userId) {
+            send(ws, { type: "error", message: "join_channel required before ptt_text" });
+            return;
+          }
+          if (!text) {
+            send(ws, { type: "error", message: "text is required" });
+            return;
+          }
+          if (text.length > 160) {
+            send(ws, { type: "error", message: "text max length is 160 chars" });
+            return;
+          }
+          const account = await getUserByUsername(state.userId);
+          if (!account) {
+            send(ws, { type: "error", message: "unknown user" });
+            return;
+          }
+          const allowed = await canAccessChannel(account.user_id, account.role, state.channelId);
+          if (!allowed) {
+            send(ws, { type: "error", message: "no access to this channel" });
+            return;
+          }
+          await savePttTextMessage({
+            userDbId: account.user_id,
+            channelCode: state.channelId,
+            messageText: text
+          });
+          broadcastToChannel(clients, state.channelId, {
+            type: "ptt_text",
+            channelId: state.channelId,
+            userId: state.userId,
+            text,
+            createdAt: new Date().toISOString()
+          });
           return;
         }
 

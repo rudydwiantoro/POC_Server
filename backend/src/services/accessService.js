@@ -1,4 +1,5 @@
 const { pool } = require("../db/pool");
+const crypto = require("crypto");
 
 async function getUserWithDevice(username, deviceLabel) {
   const sql = `
@@ -23,6 +24,46 @@ async function getUserWithDevice(username, deviceLabel) {
   `;
   const { rows } = await pool.query(sql, [username, deviceLabel]);
   return rows[0] || null;
+}
+
+async function getOrCreateUserWithDevice(username, deviceLabel, platform = "android") {
+  const existing = await getUserWithDevice(username, deviceLabel);
+  if (existing) return existing;
+  const userRes = await pool.query(
+    `
+    SELECT id AS user_id, username, display_name, role
+    FROM users
+    WHERE username = $1
+    LIMIT 1
+    `,
+    [username]
+  );
+  const u = userRes.rows[0];
+  if (!u) return null;
+  const newDevId = crypto.randomUUID();
+  const devIdRes = await pool.query(
+    `
+    INSERT INTO devices (id, user_id, device_label, platform)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id AS device_id, device_label
+    `,
+    [newDevId, u.user_id, deviceLabel, platform]
+  );
+  return {
+    user_id: u.user_id,
+    username: u.username,
+    display_name: u.display_name,
+    role: u.role,
+    device_id: devIdRes.rows[0].device_id,
+    device_label: devIdRes.rows[0].device_label,
+    beacon_enabled: false,
+    beacon_interval_min: 15,
+    beacon_distance_km: 1,
+    beacon_mode: "normal",
+    beacon_batch_size: 50,
+    beacon_batch_max_wait_min: 120,
+    beacon_normal_send_min: 60
+  };
 }
 
 async function getUserByUsername(username) {
@@ -93,11 +134,34 @@ function canEmergencyOverride(role) {
 
 module.exports = {
   getUserWithDevice,
+  getOrCreateUserWithDevice,
   getUserByUsername,
   getAllowedChannelsForUser,
   canAccessChannel,
   getVisibleChannels,
   canEmergencyOverride,
+  async activateDeviceForUser(username, deviceLabel, platform = "android") {
+    const existing = await getUserWithDevice(username, deviceLabel);
+    if (existing) return existing;
+    const user = await getUserByUsername(username);
+    if (!user) return null;
+    const newDevId = crypto.randomUUID();
+    const { rows } = await pool.query(
+      `
+      INSERT INTO devices (id, user_id, device_label, platform)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id AS device_id, device_label
+      `,
+      [newDevId, user.user_id, deviceLabel, platform]
+    );
+    return {
+      user_id: user.user_id,
+      username: user.username,
+      role: user.role,
+      device_id: rows[0].device_id,
+      device_label: rows[0].device_label
+    };
+  },
   async getDeviceBeaconSetting(deviceDbId) {
     const { rows } = await pool.query(
       `

@@ -7,8 +7,11 @@ const channelRoutes = require("./routes/channelRoutes");
 const pttRoutes = require("./routes/pttRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const dispatchRoutes = require("./routes/dispatchRoutes");
+const generatorRoutes = require("./routes/generatorRoutes");
 const { requireAuth } = require("./middleware/authMiddleware");
+const { requireActiveLicense } = require("./middleware/licenseMiddleware");
 const { publicBaseUrl } = require("./config/env");
+const { getLicenseStatus } = require("./services/licenseService");
 
 function createApp() {
   const app = express();
@@ -36,6 +39,16 @@ function createApp() {
     });
   });
 
+  app.get("/api/public/about", async (_req, res) => {
+    const lic = await getLicenseStatus();
+    return res.json({
+      companyName: lic.companyName || "Unknown",
+      serverName: lic.serverName || "Unknown",
+      expiresAt: lic.expiresAt || null,
+      active: Boolean(lic.active)
+    });
+  });
+
   app.get("/.well-known/poc-radio-server-config.json", (req, res) => {
     const hostBase = `${req.protocol}://${req.get("host")}`;
     const baseUrl = publicBaseUrl || hostBase;
@@ -52,10 +65,11 @@ function createApp() {
   });
 
   app.use("/api/auth", authRoutes);
-  app.use("/api/channels", requireAuth, channelRoutes);
-  app.use("/api/ptt/floor", requireAuth, pttRoutes);
-  app.use("/api/location", requireAuth, locationRoutes);
-  app.use("/api/dispatch", requireAuth, dispatchRoutes);
+  app.use("/api/generator", generatorRoutes);
+  app.use("/api/channels", requireAuth, requireActiveLicense, channelRoutes);
+  app.use("/api/ptt/floor", requireAuth, requireActiveLicense, pttRoutes);
+  app.use("/api/location", requireAuth, requireActiveLicense, locationRoutes);
+  app.use("/api/dispatch", requireAuth, requireActiveLicense, dispatchRoutes);
 
   return app;
 }

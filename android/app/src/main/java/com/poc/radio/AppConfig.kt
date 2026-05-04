@@ -1,6 +1,7 @@
 package com.poc.radio
 
 import android.content.Context
+import android.provider.Settings
 
 object AppConfig {
     private const val PREFS = "poc_radio_prefs"
@@ -9,6 +10,7 @@ object AppConfig {
     private const val KEY_TOKEN = "access_token"
     private const val KEY_USER_ID = "user_id"
     private const val KEY_DEVICE_ID = "device_id"
+    private const val KEY_INSTALLATION_DEVICE_ID = "installation_device_id"
     private const val KEY_BEACON_ENABLED = "beacon_enabled"
     private const val KEY_BEACON_INTERVAL_MIN = "beacon_interval_min"
     private const val KEY_BEACON_DISTANCE_KM = "beacon_distance_km"
@@ -60,7 +62,22 @@ object AppConfig {
 
     fun token(context: Context): String = prefs(context).getString(KEY_TOKEN, "") ?: ""
     fun userId(context: Context): String = prefs(context).getString(KEY_USER_ID, "") ?: ""
-    fun deviceId(context: Context): String = prefs(context).getString(KEY_DEVICE_ID, "") ?: ""
+    fun deviceId(context: Context): String {
+        val explicit = prefs(context).getString(KEY_DEVICE_ID, "") ?: ""
+        if (explicit.isNotBlank()) return explicit
+        val existing = prefs(context).getString(KEY_INSTALLATION_DEVICE_ID, "") ?: ""
+        if (existing.isNotBlank()) return existing
+        val androidId = runCatching {
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+        }.getOrNull().orEmpty()
+        val generated = if (androidId.isNotBlank()) {
+            "and-" + androidId.lowercase()
+        } else {
+            "apk-" + java.util.UUID.randomUUID().toString()
+        }
+        prefs(context).edit().putString(KEY_INSTALLATION_DEVICE_ID, generated).apply()
+        return generated
+    }
     fun beaconEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_BEACON_ENABLED, false)
     fun beaconIntervalMin(context: Context): Int = prefs(context).getInt(KEY_BEACON_INTERVAL_MIN, 15)
     fun beaconDistanceKm(context: Context): Double =

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>License Generator</title>
+    <style>
+      body { font-family: "Segoe UI", Tahoma, sans-serif; margin: 24px; background: #0f1720; color: #e6f0f7; }
+      .card { max-width: 760px; margin: 0 auto; background: #162332; border: 1px solid #2e4a60; border-radius: 12px; padding: 16px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      label { font-size: 12px; color: #9fb7c9; display: block; margin-bottom: 4px; }
+      input, textarea, button { width: 100%; border: 1px solid #35556d; border-radius: 8px; padding: 9px; background: #0f1e2b; color: #e6f0f7; }
+      textarea { min-height: 120px; font-family: Consolas, monospace; }
+      button { margin-top: 12px; background: #2bbd9a; color: #05231b; font-weight: 700; cursor: pointer; }
+      .full { grid-column: 1 / -1; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>External License Generator</h2>
+      <div class="grid">
+        <div><label>Company Name</label><input id="companyName" value="MyCompany" /></div>
+        <div><label>Server Name</label><input id="serverName" value="MyServer" /></div>
+        <div><label>Max Servers</label><input id="maxServers" type="number" value="1" min="1" /></div>
+        <div><label>Max Devices</label><input id="maxDevices" type="number" value="300" min="1" /></div>
+        <div><label>Max Online Devices</label><input id="maxOnlineDevices" type="number" value="120" min="1" /></div>
+        <div><label>Expires At (ISO)</label><input id="expiresAt" value="2030-12-31T23:59:59Z" /></div>
+        <div><label>Secret Key</label><input id="secretKey" placeholder="must match server LICENSE_SECRET_KEY" /></div>
+        <div><label>Client Key</label><input id="clientKey" placeholder="must match server LICENSE_CLIENT_KEY" /></div>
+        <div class="full"><button id="btnGenerate">Generate License</button></div>
+        <div class="full"><label>License Key</label><textarea id="licenseKey" readonly></textarea></div>
+      </div>
+    </div>
+    <script>
+      function toBase64Url(bytes) {
+        let s = "";
+        for (const b of bytes) s += String.fromCharCode(b);
+        return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      }
+
+      async function hmacSha256Base64Url(secret, message) {
+        const keyData = new TextEncoder().encode(secret);
+        const msgData = new TextEncoder().encode(message);
+        const key = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        const sig = await crypto.subtle.sign("HMAC", key, msgData);
+        return toBase64Url(new Uint8Array(sig));
+      }
+
+      document.getElementById("btnGenerate").onclick = async () => {
+        const payloadObj = {
+          companyName: document.getElementById("companyName").value.trim(),
+          serverName: document.getElementById("serverName").value.trim(),
+          maxServers: Number(document.getElementById("maxServers").value || "1"),
+          maxDevices: Number(document.getElementById("maxDevices").value || "100"),
+          maxOnlineDevices: Number(document.getElementById("maxOnlineDevices").value || "20"),
+          expiresAt: new Date(document.getElementById("expiresAt").value.trim()).toISOString(),
+          clientKey: document.getElementById("clientKey").value.trim()
+        };
+        const secretKey = document.getElementById("secretKey").value.trim();
+        if (!payloadObj.companyName || !payloadObj.serverName || !payloadObj.clientKey || !secretKey) {
+          alert("companyName, serverName, clientKey, secretKey wajib diisi");
+          return;
+        }
+        if (payloadObj.expiresAt === "Invalid Date") {
+          alert("expiresAt tidak valid");
+          return;
+        }
+        const payload = toBase64Url(new TextEncoder().encode(JSON.stringify(payloadObj)));
+        const sig = await hmacSha256Base64Url(secretKey, payload);
+        document.getElementById("licenseKey").value = `${payload}.${sig}`;
+      };
+    </script>
+  </body>
+</html>

@@ -3,6 +3,8 @@ const { getActiveHolder, requestTalk, releaseTalk } = require("../services/pttSe
 const { canAccessChannel, getUserByUsername, getUserWithDevice } = require("../services/accessService");
 const { savePttTextMessage } = require("../services/pttTextService");
 const { registerBroadcaster } = require("./signalBus");
+const { getLicenseStatus } = require("../services/licenseService");
+const { setDeviceOnline, setDeviceOffline, getOnlineDeviceCount, isDeviceOnline } = require("./onlineState");
 
 function send(ws, payload) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -34,7 +36,7 @@ function createSignalingServer(httpServer) {
   const clients = new Map();
 
   wss.on("connection", (ws) => {
-    clients.set(ws, { userId: null, channelId: null });
+    clients.set(ws, { userId: null, channelId: null, deviceId: null });
     send(ws, { type: "connected", ts: new Date().toISOString() });
 
     ws.on("message", async (raw) => {
@@ -44,8 +46,20 @@ function createSignalingServer(httpServer) {
         if (!state) return;
 
         if (msg.type === "join_channel") {
+          const lic = await getLicenseStatus();
+          if (!lic.active) {
+            send(ws, { type: "error", message: lic.reason || "license inactive" });
+            return;
+          }
           state.userId = msg.userId || state.userId;
           state.channelId = msg.channelId || state.channelId;
+          state.deviceId = msg.deviceId || state.deviceId;
+          const alreadyOnline = state.deviceId ? isDeviceOnline(state.deviceId) : false;
+          if (!alreadyOnline && state.deviceId && getOnlineDeviceCount() >= Number(lic.maxOnlineDevices || 0)) {
+            send(ws, { type: "error", message: "license_max_online_devices_exceeded" });
+            return;
+          }
+          if (state.deviceId) setDeviceOnline(state.deviceId);
           const peers = [];
           for (const [client, peerState] of clients.entries()) {
             if (client === ws) continue;
@@ -185,6 +199,9 @@ function createSignalingServer(httpServer) {
           channelId: state.channelId,
           userId: state.userId
         });
+      }
+      if (state && state.deviceId) {
+        setDeviceOffline(state.deviceId);
       }
       clients.delete(ws);
     });

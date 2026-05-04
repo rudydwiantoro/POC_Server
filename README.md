@@ -59,6 +59,7 @@ Health:
 Auth:
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
+- `POST /api/auth/activation/check`
 
 Channels/PTT:
 - `GET /api/channels`
@@ -77,6 +78,7 @@ Location:
 - `GET /api/location/history/:deviceId?from=<iso>&to=<iso>&limit=<n>`
 
 Dispatch:
+- `GET /api/dispatch/about`
 - `GET /api/dispatch/overview`
 - `GET /api/dispatch/tracking/overview`
 - `GET /api/dispatch/tracking/route?deviceId=<id>&from=<iso>&to=<iso>&limit=<n>`
@@ -92,8 +94,16 @@ Dispatch:
   - payload supports: `enabled`, `intervalMin`, `distanceKm`, `mode` (`normal|eco`),
     `batchSize`, `batchMaxWaitMin`, `normalSendMin`
 - `POST /api/dispatch/emergency/override`
+- `GET /api/dispatch/admin/license`
+- `PUT /api/dispatch/admin/license`
+- `POST /api/dispatch/admin/devices/activate`
 - `GET /api/dispatch/staff/:userId/messages?limit=<n>`
 - `GET /api/dispatch/staff/:userId/messages?limit=<n>&channelId=<id>&from=<iso>&to=<iso>`
+
+Generator:
+- `POST /api/generator/login`
+- `POST /api/generator/generate/server-key`
+- `POST /api/generator/generate/device-key`
 
 Public config:
 - `GET /api/public/server-config` (untuk auto-fetch HTTP Base URL + WS URL dari APK/dispatcher guide)
@@ -140,6 +150,52 @@ npm run init-db
 Lanjutkan dengan:
 ```bash
 npm run seed-db
+```
+
+## License Key
+- License di-set dari admin panel (dispatcher), bukan dari mobile.
+- License key **digenerate dari aplikasi terpisah** (external license generator), bukan di server PoC ini.
+- Server PoC hanya melakukan verifikasi/dekripsi signature lalu menyimpan key yang valid.
+- Rekomendasi validasi key menggunakan:
+  - `LICENSE_SECRET_KEY` (secret utama untuk HMAC)
+  - `LICENSE_CLIENT_KEY` (identitas client/customer)
+- Kompatibilitas legacy masih didukung dengan kombinasi:
+  - `LICENSE_PARAM_A`
+  - `LICENSE_PARAM_B`
+  - `LICENSE_PARAM_C`
+- Key juga membawa:
+  - `companyName`
+  - `serverName`
+  - `maxServers`
+  - `maxDevices`
+  - `maxOnlineDevices`
+  - `expiresAt`
+  - `clientKey`
+
+## Mobile Activation Flow
+- Mobile tidak perlu input/decrypt license key.
+- Device cukup validasi ke server saat aktivasi/login:
+  - `POST /api/auth/activation/check`
+- Login hanya diizinkan untuk kombinasi `userId + deviceId` yang sudah terdaftar di server.
+- Jika device belum terdaftar, server akan balas `device_not_activated_on_server`.
+
+External generator tersedia di:
+- CLI: `tools/license-generator/generate-license.js`
+- Panel HTML: `tools/license-generator/license-generator.html`
+- Superadmin Panel UI: `tools/license-generator/index.html`
+- Hosted UI dari server: `http://localhost:3100/license-generator.html`
+
+Credential superadmin generator (di `.env` backend):
+- `GENERATOR_ADMIN_USER`
+- `GENERATOR_ADMIN_PASS`
+
+Aktivasi device dari dispatcher:
+- isi `userId`, `deviceId`, `deviceKey` di panel `About & License -> Device Activation`
+- klik `Activate Device`
+
+Contoh generate (external app / machine admin):
+```bash
+node tools/license-generator/generate-license.js --company=MyCo --server=MyServer --maxServers=1 --maxDevices=300 --maxOnline=120 --expiresAt=2030-12-31T23:59:59Z --secretKey=YOUR_SECRET --clientKey=CLIENT_A
 ```
 
 ## Operation Manual

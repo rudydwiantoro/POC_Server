@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Superadmin License Generator</title>
+    <style>
+      body { margin: 0; font-family: "Segoe UI", Tahoma, sans-serif; background: #0b141d; color: #e8f1f8; }
+      .wrap { max-width: 920px; margin: 24px auto; padding: 0 14px; }
+      .card { background: #122131; border: 1px solid #2e4b61; border-radius: 14px; padding: 14px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .full { grid-column: 1 / -1; }
+      label { display: block; margin: 8px 0 4px; color: #a4bed0; font-size: 12px; }
+      input, textarea, button { width: 100%; border: 1px solid #355870; border-radius: 9px; padding: 9px; box-sizing: border-box; background: #0d1b28; color: #e8f1f8; }
+      textarea { min-height: 98px; font-family: Consolas, monospace; }
+      button { background: #29b691; color: #03231a; font-weight: 700; cursor: pointer; margin-top: 10px; }
+      .hidden { display: none; }
+      .menu { display: flex; gap: 8px; margin: 10px 0; }
+      .menu button { margin: 0; }
+      h2, h3 { margin: 6px 0 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div id="loginCard" class="card">
+        <h2>Superadmin Login</h2>
+        <div class="row">
+          <div class="full"><label>API Base URL</label><input id="apiBase" value="http://localhost:3100" /></div>
+          <div><label>Username</label><input id="suUser" value="superadmin" /></div>
+          <div><label>Password</label><input id="suPass" type="password" /></div>
+          <div class="full"><button id="btnSuLogin">Login</button></div>
+        </div>
+      </div>
+      <div id="appCard" class="card hidden">
+        <h2>License Generator Panel</h2>
+        <div class="menu">
+          <button id="menuServer">Generate Server Key</button>
+          <button id="menuDevice">Generate Device Key</button>
+        </div>
+        <div id="panelServer">
+          <div class="row">
+            <div><label>Company Name</label><input id="svCompany" value="MyCompany" /></div>
+            <div><label>Server Name</label><input id="svServer" value="MyServer" /></div>
+            <div><label>Max Servers</label><input id="svMaxServers" type="number" min="1" value="1" /></div>
+            <div><label>Max Devices</label><input id="svMaxDevices" type="number" min="1" value="300" /></div>
+            <div><label>Max Online Devices</label><input id="svMaxOnline" type="number" min="1" value="120" /></div>
+            <div><label>Expires At (ISO)</label><input id="svExpiresAt" value="2030-12-31T23:59:59Z" /></div>
+            <div><label>Client Key</label><input id="svClientKey" value="CLIENT_A" /></div>
+            <div><label>Secret Key (optional)</label><input id="svSecretKey" /></div>
+            <div class="full"><button id="btnGenServerKey">Generate Server Key</button></div>
+            <div class="full"><label>Server License Key</label><textarea id="svKeyOut" readonly></textarea></div>
+          </div>
+        </div>
+        <div id="panelDevice" class="hidden">
+          <div class="row">
+            <div><label>User ID</label><input id="dvUserId" /></div>
+            <div><label>Device ID</label><input id="dvDeviceId" /></div>
+            <div><label>Client Key</label><input id="dvClientKey" value="CLIENT_A" /></div>
+            <div><label>Secret Key (optional)</label><input id="dvSecretKey" /></div>
+            <div class="full"><button id="btnGenDeviceKey">Generate Device Key</button></div>
+            <div class="full"><label>Device Activation Key</label><textarea id="dvKeyOut" readonly></textarea></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      let token = "";
+      function base() { return document.getElementById("apiBase").value.trim().replace(/\/+$/, ""); }
+      async function api(path, body) {
+        const res = await fetch(`${base()}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify(body || {})
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `request_failed_${res.status}`);
+        return data;
+      }
+      function showPanel(mode) {
+        document.getElementById("panelServer").classList.toggle("hidden", mode !== "server");
+        document.getElementById("panelDevice").classList.toggle("hidden", mode !== "device");
+      }
+      document.getElementById("btnSuLogin").onclick = async () => {
+        try {
+          const data = await api("/api/generator/login", {
+            username: document.getElementById("suUser").value.trim(),
+            password: document.getElementById("suPass").value
+          });
+          token = data.accessToken || "";
+          document.getElementById("loginCard").classList.add("hidden");
+          document.getElementById("appCard").classList.remove("hidden");
+        } catch (e) { alert(`Login gagal: ${e.message}`); }
+      };
+      document.getElementById("menuServer").onclick = () => showPanel("server");
+      document.getElementById("menuDevice").onclick = () => showPanel("device");
+      document.getElementById("btnGenServerKey").onclick = async () => {
+        try {
+          const data = await api("/api/generator/generate/server-key", {
+            companyName: document.getElementById("svCompany").value.trim(),
+            serverName: document.getElementById("svServer").value.trim(),
+            maxServers: Number(document.getElementById("svMaxServers").value || "1"),
+            maxDevices: Number(document.getElementById("svMaxDevices").value || "100"),
+            maxOnlineDevices: Number(document.getElementById("svMaxOnline").value || "20"),
+            expiresAt: document.getElementById("svExpiresAt").value.trim(),
+            clientKey: document.getElementById("svClientKey").value.trim(),
+            secretKey: document.getElementById("svSecretKey").value.trim()
+          });
+          document.getElementById("svKeyOut").value = data.licenseKey || "";
+        } catch (e) { alert(`Generate server key gagal: ${e.message}`); }
+      };
+      document.getElementById("btnGenDeviceKey").onclick = async () => {
+        try {
+          const data = await api("/api/generator/generate/device-key", {
+            userId: document.getElementById("dvUserId").value.trim(),
+            deviceId: document.getElementById("dvDeviceId").value.trim(),
+            clientKey: document.getElementById("dvClientKey").value.trim(),
+            secretKey: document.getElementById("dvSecretKey").value.trim()
+          });
+          document.getElementById("dvKeyOut").value = data.deviceKey || "";
+        } catch (e) { alert(`Generate device key gagal: ${e.message}`); }
+      };
+    </script>
+  </body>
+</html>

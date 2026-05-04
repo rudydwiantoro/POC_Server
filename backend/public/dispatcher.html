@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dispatcher Tracking Console</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <style>
+      :root {
+        --bg: #071019;
+        --panel: #0f1f2d;
+        --panel-soft: #162d3d;
+        --line: #2a4960;
+        --text: #e6f0f7;
+        --muted: #9bb2c2;
+        --accent: #27c4a8;
+        --warn: #d5aa45;
+        --blue: #29a0ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 6% 0%, rgba(41,160,255,.15) 0%, transparent 30%),
+          radial-gradient(circle at 92% 10%, rgba(39,196,168,.12) 0%, transparent 25%),
+          var(--bg);
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        min-width: 1100px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(90deg, rgba(41,160,255,.15), rgba(39,196,168,.1));
+      }
+      .top h1 {
+        margin: 0;
+        font-size: 19px;
+        letter-spacing: 0.7px;
+        text-transform: uppercase;
+      }
+      .meta { color: var(--muted); font-size: 12px; }
+      .layout {
+        display: grid;
+        grid-template-columns: 350px 1fr 330px;
+        height: calc(100vh - 54px);
+      }
+      .panel {
+        border-right: 1px solid var(--line);
+        background: linear-gradient(180deg, var(--panel), #0c1925);
+        display: flex;
+        flex-direction: column;
+      }
+      .panel-right {
+        border-left: 1px solid var(--line);
+        background: linear-gradient(180deg, #0f2131, #0a1722);
+        overflow: auto;
+      }
+      .box { padding: 12px; border-bottom: 1px solid var(--line); }
+      label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+      input, select, button {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px;
+        font-size: 13px;
+      }
+      input, select { background: #0f2230; color: var(--text); }
+      button {
+        margin-top: 8px;
+        background: linear-gradient(90deg, var(--accent), #2ca5c6);
+        color: #032229;
+        font-weight: 700;
+        cursor: pointer;
+        letter-spacing: 0.3px;
+      }
+      .small { font-size: 12px; color: var(--muted); margin-top: 8px; }
+      .staff-list {
+        overflow: auto;
+        padding: 10px;
+      }
+      .staff {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 9px;
+        margin-bottom: 8px;
+        cursor: pointer;
+      }
+      .staff.active { border-color: #53d1b5; box-shadow: 0 0 0 1px #53d1b5 inset; }
+      .staff .name { font-weight: 700; }
+      .staff .meta { margin-top: 3px; }
+      .badge {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #29475c;
+        color: #b8cfdd;
+        font-size: 11px;
+      }
+      .badge.warn { background: #4b3a10; color: #ffdd86; }
+      #map { width: 100%; height: 100%; }
+      .map-wrap { position: relative; }
+      .floating {
+        position: absolute;
+        right: 12px;
+        top: 12px;
+        z-index: 500;
+        background: rgba(7, 18, 27, 0.86);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 9px 11px;
+        font-size: 12px;
+      }
+      .kpis {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .kpi {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        background: #13293a;
+      }
+      .kpi .v {
+        font-weight: 800;
+        font-size: 18px;
+        margin-top: 2px;
+      }
+      .event-list {
+        padding: 10px;
+      }
+      .event {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #12283a;
+        padding: 8px;
+        margin-bottom: 8px;
+        font-size: 12px;
+      }
+      .offline {
+        color: var(--warn);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loginGate" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#071019;z-index:9999;">
+      <div style="width:420px;background:#0f1f2d;border:1px solid #2a4960;border-radius:12px;padding:18px;">
+        <h2 style="margin:0 0 10px 0;">Dispatcher Login</h2>
+        <label for="userId">User ID</label>
+        <input id="userId" value="supervisor" />
+        <label for="deviceId" style="margin-top:8px;display:block;">Device ID</label>
+        <input id="deviceId" value="desk1" />
+        <button id="btnLogin">Login & Enter Console</button>
+        <div class="small" id="loginStatus">Not logged in.</div>
+      </div>
+    </div>
+    <div class="top">
+      <h1>Dispatcher Tracking Console</h1>
+      <div class="meta">Desktop Browser Only - Live staff map from GPS + PTT activity</div>
+    </div>
+    <div class="layout">
+      <aside class="panel">
+        <div class="box">
+          <label for="channelFilter">Channel Group</label>
+          <select id="channelFilter">
+            <option value="all">All Channels</option>
+          </select>
+          <button id="btnRefresh">Refresh Tracking</button>
+          <div class="small" id="lastSync">Last sync: -</div>
+        </div>
+        <div class="staff-list" id="staffList"></div>
+      </aside>
+      <main class="map-wrap">
+        <div id="map"></div>
+        <div class="floating" id="mapInfo">No staff selected.</div>
+      </main>
+      <aside class="panel-right">
+        <div class="box">
+          <div class="kpis">
+            <div class="kpi"><div class="meta">Active Staff</div><div class="v" id="kpiActive">0</div></div>
+            <div class="kpi"><div class="meta">Stale/Offline</div><div class="v" id="kpiOffline">0</div></div>
+            <div class="kpi"><div class="meta">With GPS</div><div class="v" id="kpiGps">0</div></div>
+            <div class="kpi"><div class="meta">Talking Now</div><div class="v" id="kpiTalking">0</div></div>
+          </div>
+        </div>
+        <div class="box">
+          <div class="meta">Recent Operations</div>
+        </div>
+        <div class="event-list" id="eventList"></div>
+        <div class="box" id="geofenceAdminBox">
+          <div class="meta"><b>Geofence Editor</b></div>
+          <select id="geoSelect"></select>
+          <label for="geoRadius" style="margin-top:6px;">Radius (m)</label>
+          <input id="geoRadius" type="number" min="100" step="50" />
+          <button id="btnSaveGeofences">Save Geofences</button>
+          <div class="small">Drag center marker on map to move geofence.</div>
+        </div>
+        <div class="box" id="rolePermBox">
+          <div class="meta"><b>Role Menu Permission</b></div>
+          <select id="roleSelect"></select>
+          <div id="rolePermList" class="small"></div>
+          <button id="btnSaveRolePerm">Save Role Permission</button>
+        </div>
+        <div class="box" id="userPermBox">
+          <div class="meta"><b>User Menu Permission</b></div>
+          <select id="userSelect"></select>
+          <div id="userPermList" class="small"></div>
+          <button id="btnSaveUserPerm">Save User Permission</button>
+          <div class="small">`inherit` = follow role permission.</div>
+        </div>
+      </aside>
+    </div>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script>
+      let accessToken = "";
+      let map = null;
+      let markers = new Map();
+      let selectedUserId = null;
+      let refreshTimer = null;
+      let staffCache = [];
+      let geofenceLayers = [];
+      let geofenceMarkers = [];
+      let geofenceAlerts = [];
+      let GEOFENCES = [];
+      let permissions = {};
+      let rolePermState = { menuKeys: [], roles: {} };
+      let userPermState = { menuKeys: [], users: [] };
+
+      function setText(id, text) {
+        document.getElementById(id).textContent = text;
+      }
+
+      function fmtTime(iso) {
+        if (!iso) return "-";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return "-";
+        return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+      }
+
+      function minutesSince(iso) {
+        if (!iso) return null;
+        const d = new Date(iso).getTime();
+        if (Number.isNaN(d)) return null;
+        return Math.round((Date.now() - d) / 60000);
+      }
+
+      async function api(path, options = {}) {
+        const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+        const res = await fetch(path, { ...options, headers });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
+        return data;
+      }
+
+      async function login() {
+        const userId = document.getElementById("userId").value.trim();
+        const deviceId = document.getElementById("deviceId").value.trim();
+        const data = await api("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ userId, deviceId })
+        });
+        accessToken = data.accessToken || "";
+        const role = data.user ? data.user.role : "-";
+        setText("loginStatus", `Logged in as ${userId} (${role})`);
+        await loadMyPermissions();
+      }
+
+      async function loadMyPermissions() {
+        const data = await api("/api/dispatch/menu-permissions/me");
+        permissions = data.permissions || {};
+        applyMenuVisibility();
+        if (permissions.role_permission_admin || permissions.user_permission_admin) {
+          await loadPermissionAdminData();
+        }
+      }
+
+      function applyMenuVisibility() {
+        document.getElementById("geofenceAdminBox").style.display = permissions.geofence_admin ? "block" : "none";
+        document.getElementById("rolePermBox").style.display = permissions.role_permission_admin ? "block" : "none";
+        document.getElementById("userPermBox").style.display = permissions.user_permission_admin ? "block" : "none";
+      }
+
+      async function loadPermissionAdminData() {
+        if (permissions.role_permission_admin) {
+          rolePermState = await api("/api/dispatch/admin/menu-permissions/roles");
+          const roles = Object.keys(rolePermState.roles || {}).sort();
+          const sel = document.getElementById("roleSelect");
+          sel.innerHTML = roles.map((r) => `<option value="${r}">${r}</option>`).join("");
+          renderRolePermEditor();
+        }
+        if (permissions.user_permission_admin) {
+          userPermState = await api("/api/dispatch/admin/menu-permissions/users");
+          const sel = document.getElementById("userSelect");
+          sel.innerHTML = userPermState.users.map((u) => `<option value="${u.userId}">${u.userId} (${u.role})</option>`).join("");
+          renderUserPermEditor();
+        }
+      }
+
+      function ensureMap() {
+        if (map) return;
+        map = L.map("map", { zoomControl: true }).setView([-8.65, 115.22], 12);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(map);
+        drawGeofences();
+      }
+
+      function drawGeofences() {
+        geofenceLayers.forEach((layer) => map.removeLayer(layer));
+        geofenceMarkers.forEach((m) => map.removeLayer(m));
+        geofenceLayers = [];
+        geofenceMarkers = [];
+        for (const zone of GEOFENCES) {
+          const c = L.circle([zone.center.lat, zone.center.lon], {
+            radius: zone.radiusM,
+            color: zone.color,
+            weight: 1.5,
+            fillColor: zone.color,
+            fillOpacity: 0.08
+          }).addTo(map);
+          c.bindTooltip(`${zone.name} (${zone.radiusM}m)`);
+          geofenceLayers.push(c);
+          const marker = L.marker([zone.center.lat, zone.center.lon], { draggable: permissions.geofence_admin }).addTo(map);
+          marker.bindTooltip(`${zone.name} center`);
+          marker.on("dragend", (e) => {
+            zone.center.lat = e.target.getLatLng().lat;
+            zone.center.lon = e.target.getLatLng().lng;
+            c.setLatLng(e.target.getLatLng());
+            populateGeofenceEditor();
+          });
+          geofenceMarkers.push(marker);
+        }
+      }
+
+      function markerColor(staff) {
+        const mins = minutesSince(staff.lastKnownLocation ? staff.lastKnownLocation.recordedAt : null);
+        if (mins == null) return "#8c99a7";
+        if (mins > 30) return "#d0a83b";
+        return "#2ca58d";
+      }
+
+      function makeIcon(color) {
+        return makeRoleIcon("operator", color);
+      }
+
+      function channelColor(channelId) {
+        const mapColor = {
+          engineering: "#2ca58d",
+          housekeeping: "#e0a93e",
+          security: "#2a9fff",
+          "all-call": "#d95555",
+          unassigned: "#8c99a7"
+        };
+        return mapColor[channelId] || "#8c99a7";
+      }
+
+      function makeRoleIcon(role, color, channelId) {
+        const label = role === "dispatcher" ? "HQ" : role === "operator" ? "ST" : "??";
+        const border = channelColor(channelId);
+        return L.divIcon({
+          className: "",
+          html: `<div style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:${color};border:2px solid ${border};box-shadow:0 0 0 2px rgba(0,0,0,.25);font-size:10px;font-weight:700;color:#06222d">${label}</div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+      }
+
+      function renderList(staff) {
+        const wrap = document.getElementById("staffList");
+        wrap.innerHTML = "";
+        const channelFilter = document.getElementById("channelFilter").value;
+        const groups = new Map();
+        for (const s of staff) {
+          const channel = s.lastPtt && s.lastPtt.channelId
+            ? s.lastPtt.channelId
+            : (Array.isArray(s.channels) && s.channels[0]) ? s.channels[0] : "unassigned";
+          if (channelFilter !== "all" && channel !== channelFilter) continue;
+          if (!groups.has(channel)) groups.set(channel, []);
+          groups.get(channel).push(s);
+        }
+
+        const channels = Array.from(groups.keys()).sort();
+        for (const ch of channels) {
+          const head = document.createElement("div");
+          head.className = "meta";
+          head.style.padding = "6px 2px";
+          head.innerHTML = `<b>${ch.toUpperCase()}</b> (${groups.get(ch).length})`;
+          wrap.appendChild(head);
+          groups.get(ch).forEach((s) => {
+            const el = document.createElement("div");
+            el.className = `staff${selectedUserId === s.userId ? " active" : ""}`;
+            const mins = minutesSince(s.lastKnownLocation ? s.lastKnownLocation.recordedAt : null);
+            const stale = mins == null || mins > 30;
+            el.innerHTML = `
+              <div class="name">${s.displayName} <span class="meta">(${s.userId})</span></div>
+              <div class="meta">Device: ${s.deviceId} | Role: ${s.role}</div>
+              <div class="meta">Channels: ${(s.channels || []).join(", ") || "-"}</div>
+              <div class="meta">Last GPS: ${s.lastKnownLocation ? fmtTime(s.lastKnownLocation.recordedAt) : "No data"}</div>
+              <div class="meta">Last PTT: ${s.lastPtt ? `${s.lastPtt.channelId} @ ${fmtTime(s.lastPtt.startedAt)}` : "No data"}</div>
+              <span class="badge ${stale ? "warn" : ""}">${stale ? "stale/offline" : "active"}</span>
+            `;
+            el.onclick = () => {
+              selectedUserId = s.userId;
+              renderList(staffCache);
+              focusStaff(s.userId);
+            };
+            wrap.appendChild(el);
+          });
+        }
+      }
+
+      function updateKpis(staff) {
+        let active = 0;
+        let offline = 0;
+        let withGps = 0;
+        let talking = 0;
+        for (const s of staff) {
+          if (s.lastKnownLocation) withGps += 1;
+          const mins = minutesSince(s.lastKnownLocation ? s.lastKnownLocation.recordedAt : null);
+          if (mins != null && mins <= 30) active += 1;
+          else offline += 1;
+          if (s.lastPtt && !s.lastPtt.endedAt) talking += 1;
+        }
+        setText("kpiActive", String(active));
+        setText("kpiOffline", String(offline));
+        setText("kpiGps", String(withGps));
+        setText("kpiTalking", String(talking));
+      }
+
+      function renderEvents(staff) {
+        const events = [];
+        for (const al of geofenceAlerts) {
+          events.push({
+            type: "geofence",
+            at: al.at,
+            text: `${al.name} keluar geofence (${al.location})`
+          });
+        }
+        for (const s of staff) {
+          if (s.lastPtt) {
+            events.push({
+              type: "ptt",
+              at: s.lastPtt.startedAt,
+              text: `${s.displayName} PTT on ${s.lastPtt.channelId}`
+            });
+          }
+          if (s.lastKnownLocation) {
+            events.push({
+              type: "gps",
+              at: s.lastKnownLocation.recordedAt,
+              text: `${s.displayName} GPS update (${s.lastKnownLocation.latitude.toFixed(5)}, ${s.lastKnownLocation.longitude.toFixed(5)})`
+            });
+          }
+        }
+        events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+        const top = events.slice(0, 12);
+        const wrap = document.getElementById("eventList");
+        wrap.innerHTML = "";
+        if (!top.length) {
+          wrap.innerHTML = `<div class="event">No recent events.</div>`;
+          return;
+        }
+        for (const ev of top) {
+          const el = document.createElement("div");
+          el.className = "event";
+          el.innerHTML = `<b>${ev.type.toUpperCase()}</b><br/>${ev.text}<br/><span class="meta">${fmtTime(ev.at)}</span>`;
+          wrap.appendChild(el);
+        }
+      }
+
+      function upsertMarkers(staff) {
+        const activeIds = new Set();
+        const channelFilter = document.getElementById("channelFilter").value;
+        for (const s of staff) {
+          if (!s.lastKnownLocation) continue;
+          const effectiveChannel = s.lastPtt && s.lastPtt.channelId
+            ? s.lastPtt.channelId
+            : (Array.isArray(s.channels) && s.channels[0]) ? s.channels[0] : "unassigned";
+          if (channelFilter !== "all" && effectiveChannel !== channelFilter) continue;
+          activeIds.add(s.userId);
+          const latlng = [s.lastKnownLocation.latitude, s.lastKnownLocation.longitude];
+          const title = `${s.displayName} (${s.userId})`;
+          const popup = `
+            <b>${title}</b><br/>
+            Device: ${s.deviceId}<br/>
+            Last GPS: ${fmtTime(s.lastKnownLocation.recordedAt)}<br/>
+            Accuracy: ${s.lastKnownLocation.accuracyM == null ? "-" : `${Math.round(s.lastKnownLocation.accuracyM)} m`}<br/>
+            Last PTT: ${s.lastPtt ? `${s.lastPtt.channelId} @ ${fmtTime(s.lastPtt.startedAt)}` : "-"}
+          `;
+
+          const existing = markers.get(s.userId);
+          if (existing) {
+            existing.setLatLng(latlng);
+            existing.setIcon(makeRoleIcon(s.role, markerColor(s), effectiveChannel));
+            existing.setPopupContent(popup);
+          } else {
+            const m = L.marker(latlng, { icon: makeRoleIcon(s.role, markerColor(s), effectiveChannel) }).addTo(map);
+            m.bindPopup(popup);
+            markers.set(s.userId, m);
+          }
+        }
+
+        for (const [userId, marker] of markers.entries()) {
+          if (!activeIds.has(userId)) {
+            map.removeLayer(marker);
+            markers.delete(userId);
+          }
+        }
+      }
+
+      function distanceMeters(aLat, aLon, bLat, bLon) {
+        const toRad = (x) => (x * Math.PI) / 180;
+        const R = 6371000;
+        const dLat = toRad(bLat - aLat);
+        const dLon = toRad(bLon - aLon);
+        const x = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+          + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+        return R * c;
+      }
+
+      function evaluateGeofence(staff) {
+        const now = Date.now();
+        const nextAlerts = [];
+        for (const s of staff) {
+          if (!s.lastKnownLocation) continue;
+          const p = s.lastKnownLocation;
+          let insideAny = false;
+          for (const zone of GEOFENCES) {
+            const d = distanceMeters(p.latitude, p.longitude, zone.center.lat, zone.center.lon);
+            if (d <= zone.radiusM) {
+              insideAny = true;
+              break;
+            }
+          }
+          if (!insideAny) {
+            nextAlerts.push({
+              userId: s.userId,
+              name: s.displayName,
+              at: new Date(now).toISOString(),
+              location: `${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`
+            });
+          }
+        }
+        if (nextAlerts.length > geofenceAlerts.length) {
+          playAlertSound();
+        }
+        geofenceAlerts = nextAlerts;
+      }
+
+      function playAlertSound() {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = "sine";
+          o.frequency.value = 880;
+          o.connect(g);
+          g.connect(ctx.destination);
+          g.gain.setValueAtTime(0.001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+          o.start();
+          o.stop(ctx.currentTime + 0.25);
+        } catch (_e) {}
+      }
+
+      function fillChannelFilter(staff) {
+        const sel = document.getElementById("channelFilter");
+        const old = sel.value || "all";
+        const set = new Set(["all"]);
+        for (const s of staff) {
+          if (s.lastPtt && s.lastPtt.channelId) set.add(s.lastPtt.channelId);
+          (s.channels || []).forEach((c) => set.add(c));
+        }
+        const vals = Array.from(set).sort((a, b) => (a === "all" ? -1 : b === "all" ? 1 : a.localeCompare(b)));
+        sel.innerHTML = vals.map((v) => `<option value="${v}">${v === "all" ? "All Channels" : v}</option>`).join("");
+        if (vals.includes(old)) sel.value = old;
+      }
+
+      function focusStaff(userId) {
+        const staff = staffCache.find((x) => x.userId === userId);
+        if (!staff || !staff.lastKnownLocation) {
+          setText("mapInfo", "Selected staff has no GPS location yet.");
+          return;
+        }
+        const latlng = [staff.lastKnownLocation.latitude, staff.lastKnownLocation.longitude];
+        map.setView(latlng, 15);
+        const marker = markers.get(userId);
+        if (marker) marker.openPopup();
+        setText(
+          "mapInfo",
+          `${staff.displayName} | ${staff.lastPtt ? `CH ${staff.lastPtt.channelId}` : "No PTT"} | GPS ${fmtTime(staff.lastKnownLocation.recordedAt)}`
+        );
+      }
+
+      async function refreshTracking() {
+        ensureMap();
+        const data = await api("/api/dispatch/tracking/overview");
+        staffCache = Array.isArray(data.staff) ? data.staff : [];
+        fillChannelFilter(staffCache);
+        evaluateGeofence(staffCache);
+        renderList(staffCache);
+        updateKpis(staffCache);
+        renderEvents(staffCache);
+        upsertMarkers(staffCache);
+        setText("lastSync", `Last sync: ${fmtTime(data.generatedAt)}`);
+        if (selectedUserId) focusStaff(selectedUserId);
+      }
+
+      async function loadGeofences() {
+        const data = await api("/api/dispatch/geofences");
+        GEOFENCES = Array.isArray(data.geofences) ? data.geofences : [];
+        populateGeofenceEditor();
+        if (map) drawGeofences();
+      }
+
+      function populateGeofenceEditor() {
+        const sel = document.getElementById("geoSelect");
+        if (!sel) return;
+        const old = sel.value;
+        sel.innerHTML = GEOFENCES.map((g) => `<option value="${g.id}">${g.name}</option>`).join("");
+        if (GEOFENCES.length && GEOFENCES.some((g) => g.id === old)) sel.value = old;
+        onGeofenceSelected();
+      }
+
+      function onGeofenceSelected() {
+        const sel = document.getElementById("geoSelect");
+        const item = GEOFENCES.find((g) => g.id === sel.value);
+        if (!item) return;
+        document.getElementById("geoRadius").value = String(Math.round(item.radiusM));
+      }
+
+      function renderRolePermEditor() {
+        const role = document.getElementById("roleSelect").value;
+        const node = document.getElementById("rolePermList");
+        const p = (rolePermState.roles && rolePermState.roles[role]) || {};
+        node.innerHTML = rolePermState.menuKeys.map((k) => {
+          const checked = p[k] !== false ? "checked" : "";
+          return `<label><input type="checkbox" data-k="${k}" ${checked}/> ${k}</label>`;
+        }).join("");
+      }
+
+      function renderUserPermEditor() {
+        const userId = document.getElementById("userSelect").value;
+        const node = document.getElementById("userPermList");
+        const user = userPermState.users.find((u) => u.userId === userId);
+        if (!user) {
+          node.innerHTML = "";
+          return;
+        }
+        node.innerHTML = userPermState.menuKeys.map((k) => {
+          const val = user.permissions[k];
+          return `<label>${k}
+            <select data-k="${k}">
+              <option value="inherit" ${val === null ? "selected" : ""}>inherit</option>
+              <option value="allow" ${val === true ? "selected" : ""}>allow</option>
+              <option value="deny" ${val === false ? "selected" : ""}>deny</option>
+            </select>
+          </label>`;
+        }).join("");
+      }
+
+      document.getElementById("btnLogin").onclick = async () => {
+        try {
+          await login();
+          await loadGeofences();
+          await refreshTracking();
+          document.getElementById("loginGate").style.display = "none";
+          if (refreshTimer) clearInterval(refreshTimer);
+          refreshTimer = setInterval(() => {
+            refreshTracking().catch((e) => setText("mapInfo", `Auto refresh failed: ${e.message}`));
+          }, 15000);
+        } catch (e) {
+          setText("loginStatus", `Login failed: ${e.message}`);
+        }
+      };
+
+      document.getElementById("btnRefresh").onclick = () => {
+        refreshTracking().catch((e) => setText("mapInfo", `Refresh failed: ${e.message}`));
+      };
+      document.getElementById("channelFilter").onchange = () => {
+        renderList(staffCache);
+        upsertMarkers(staffCache);
+      };
+      document.getElementById("geoSelect").onchange = onGeofenceSelected;
+      document.getElementById("geoRadius").onchange = () => {
+        const sel = document.getElementById("geoSelect").value;
+        const zone = GEOFENCES.find((g) => g.id === sel);
+        if (!zone) return;
+        zone.radiusM = Number(document.getElementById("geoRadius").value) || zone.radiusM;
+        drawGeofences();
+      };
+      document.getElementById("btnSaveGeofences").onclick = async () => {
+        try {
+          await api("/api/dispatch/geofences", { method: "PUT", body: JSON.stringify({ geofences: GEOFENCES }) });
+          setText("mapInfo", "Geofences saved.");
+        } catch (e) {
+          setText("mapInfo", `Save geofence failed: ${e.message}`);
+        }
+      };
+      document.getElementById("roleSelect").onchange = renderRolePermEditor;
+      document.getElementById("userSelect").onchange = renderUserPermEditor;
+      document.getElementById("btnSaveRolePerm").onclick = async () => {
+        const role = document.getElementById("roleSelect").value;
+        const checks = document.querySelectorAll("#rolePermList input[type=checkbox]");
+        const p = {};
+        checks.forEach((c) => { p[c.dataset.k] = c.checked; });
+        try {
+          await api(`/api/dispatch/admin/menu-permissions/roles/${encodeURIComponent(role)}`, {
+            method: "PUT",
+            body: JSON.stringify({ permissions: p })
+          });
+          setText("mapInfo", `Role permission saved: ${role}`);
+        } catch (e) {
+          setText("mapInfo", `Save role permission failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnSaveUserPerm").onclick = async () => {
+        const userId = document.getElementById("userSelect").value;
+        const sels = document.querySelectorAll("#userPermList select[data-k]");
+        const p = {};
+        sels.forEach((s) => {
+          if (s.value === "inherit") p[s.dataset.k] = null;
+          else p[s.dataset.k] = s.value === "allow";
+        });
+        try {
+          await api(`/api/dispatch/admin/menu-permissions/users/${encodeURIComponent(userId)}`, {
+            method: "PUT",
+            body: JSON.stringify({ permissions: p })
+          });
+          setText("mapInfo", `User permission saved: ${userId}`);
+        } catch (e) {
+          setText("mapInfo", `Save user permission failed: ${e.message}`);
+        }
+      };
+    </script>
+  </body>
+</html>

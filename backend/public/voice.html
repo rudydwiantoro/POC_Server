@@ -205,6 +205,44 @@
         state.ws.send(JSON.stringify(payload));
       }
 
+      async function getGpsForPtt() {
+        if (!("geolocation" in navigator)) return null;
+        return new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              resolve({
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                accuracyM: typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null
+              });
+            },
+            () => resolve(null),
+            {
+              enableHighAccuracy: false,
+              timeout: 1500,
+              maximumAge: 15000
+            }
+          );
+        });
+      }
+
+      async function requestTalkWithOptionalGps() {
+        if (!state.joined) return;
+        const gps = await getGpsForPtt();
+        if (gps) {
+          log("ptt request with gps", gps);
+        } else {
+          log("ptt request without gps");
+        }
+        sendWs({
+          type: "request_talk",
+          userId: state.userId,
+          deviceId: document.getElementById("deviceId").value.trim(),
+          channelId: state.channelId,
+          gps: gps || undefined
+        });
+      }
+
       async function login() {
         const userId = document.getElementById("userId").value.trim();
         const deviceId = document.getElementById("deviceId").value.trim();
@@ -363,7 +401,7 @@
             state.floorHolderUserId = msg.holder ? msg.holder.userId : null;
             const mine = msg.holder && msg.holder.userId === state.userId;
             setTrackEnabled(Boolean(mine));
-            log("floor granted", msg.holder);
+            log("floor granted", { holder: msg.holder, gpsSaved: msg.gpsSaved || false });
           } else if (msg.type === "floor_released") {
             state.floorHolderUserId = null;
             setTrackEnabled(false);
@@ -393,9 +431,8 @@
         }
       };
 
-      pttBtn.onmousedown = () => {
-        if (!state.joined) return;
-        sendWs({ type: "request_talk", userId: state.userId, channelId: state.channelId });
+      pttBtn.onmousedown = async () => {
+        await requestTalkWithOptionalGps();
       };
       pttBtn.onmouseup = () => {
         if (!state.joined) return;
@@ -407,8 +444,7 @@
       };
       pttBtn.ontouchstart = (e) => {
         e.preventDefault();
-        if (!state.joined) return;
-        sendWs({ type: "request_talk", userId: state.userId, channelId: state.channelId });
+        requestTalkWithOptionalGps();
       };
       pttBtn.ontouchend = (e) => {
         e.preventDefault();

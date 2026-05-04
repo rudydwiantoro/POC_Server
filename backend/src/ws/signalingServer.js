@@ -1,6 +1,6 @@
 const WebSocket = require("ws");
 const { getActiveHolder, requestTalk, releaseTalk } = require("../services/pttSessionService");
-const { getUserByUsername } = require("../services/accessService");
+const { getUserByUsername, getUserWithDevice } = require("../services/accessService");
 
 function send(ws, payload) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -62,20 +62,32 @@ function createSignalingServer(httpServer) {
         }
 
         if (msg.type === "request_talk") {
-          const account = await getUserByUsername(msg.userId);
+          let account = null;
+          if (msg.deviceId) {
+            account = await getUserWithDevice(msg.userId, msg.deviceId);
+          }
+          if (!account) {
+            account = await getUserByUsername(msg.userId);
+          }
           if (!account) {
             send(ws, { type: "error", message: "unknown user" });
             return;
           }
           const result = await requestTalk(msg.channelId, {
             userId: account.username,
-            userDbId: account.user_id
+            userDbId: account.user_id,
+            deviceDbId: account.device_id || null,
+            gps: msg.gps || null
           });
+          if (msg.gps) {
+            console.log(`[PTT] request_talk user=${account.username} channel=${msg.channelId} gpsSaved=${result.gpsSaved ? "yes" : "no"}`);
+          }
           if (result.ok) {
             broadcastToChannel(clients, msg.channelId, {
               type: "floor_granted",
               channelId: msg.channelId,
-              holder: result.holder
+              holder: result.holder,
+              gpsSaved: result.gpsSaved || false
             });
           } else if (result.reason === "busy") {
             send(ws, { type: "floor_busy", channelId: msg.channelId, holder: result.holder });

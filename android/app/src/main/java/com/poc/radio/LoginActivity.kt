@@ -24,6 +24,7 @@ class LoginActivity : AppCompatActivity() {
         etUserId.setText(AppConfig.userId(this))
         etDeviceId.setText(AppConfig.deviceId(this))
         etDeviceId.isEnabled = false
+        etDeviceId.visibility = android.view.View.GONE
         tvServerInfo.text = "Server: ${AppConfig.httpBaseUrl(this)}"
 
         btnConfig.setOnClickListener {
@@ -32,9 +33,9 @@ class LoginActivity : AppCompatActivity() {
 
         btnLogin.setOnClickListener {
             val userId = etUserId.text.toString().trim()
-            val deviceId = etDeviceId.text.toString().trim()
-            if (userId.isEmpty() || deviceId.isEmpty()) {
-                tvStatus.text = "Status: userId/deviceId required"
+            val deviceId = etDeviceId.text.toString().trim().ifBlank { "android-auto" }
+            if (userId.isEmpty()) {
+                tvStatus.text = "Status: userId required"
                 return@setOnClickListener
             }
 
@@ -43,17 +44,7 @@ class LoginActivity : AppCompatActivity() {
 
             thread {
                 val api = ApiClient(AppConfig.httpBaseUrl(this))
-                val activation = api.checkActivation(userId, deviceId)
-                val loginResult = activation.fold(
-                    onSuccess = { act ->
-                        if (!act.activated) {
-                            Result.failure(IllegalStateException("aktivasi gagal (${act.reason})"))
-                        } else {
-                            api.login(userId, deviceId)
-                        }
-                    },
-                    onFailure = { Result.failure(it) }
-                )
+                val loginResult = api.login(userId, deviceId)
                 runOnUiThread {
                     btnLogin.isEnabled = true
                     loginResult.onSuccess {

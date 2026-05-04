@@ -19,6 +19,8 @@ module.exports = {
   licenseParamA: process.env.LICENSE_PARAM_A || "A",
   licenseParamB: process.env.LICENSE_PARAM_B || "B",
   licenseParamC: process.env.LICENSE_PARAM_C || "C",
+  bypassLicenseValidation: process.env.BYPASS_LICENSE_VALIDATION === "true",
+  bypassDeviceValidation: process.env.BYPASS_DEVICE_VALIDATION === "true",
   db: {
     host: process.env.DB_HOST || "localhost",
     port: Number(process.env.DB_PORT || 5432),

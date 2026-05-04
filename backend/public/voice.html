@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PoC PTT</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     <style>
       :root {
         --bg: #08131d;
@@ -17,6 +18,18 @@
       .wrap { max-width: 680px; margin: 0 auto; padding: 12px; }
       .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
       .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+      .top-left { display: flex; align-items: center; gap: 8px; }
+      .conn-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #d54c4c;
+        box-shadow: 0 0 0 2px rgba(213, 76, 76, 0.18);
+      }
+      .conn-dot.on {
+        background: #31c56b;
+        box-shadow: 0 0 0 2px rgba(49, 197, 107, 0.2);
+      }
       .small { font-size: 12px; color: var(--muted); }
       .status { font-size: 13px; margin-top: 8px; }
       label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
@@ -33,6 +46,28 @@
       #pttBtn.active { border-color: #0a6f2a; background: radial-gradient(circle at 35% 30%, #4bc87a, #0b8f35); }
       .right-stack { display: flex; flex-direction: column; gap: 8px; }
       .right-stack button, .right-stack select { width: 100%; }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 12px;
+        padding: 8px 10px;
+      }
+      .icon-btn i { font-size: 12px; }
+      .icon-only {
+        width: 42px !important;
+        min-width: 42px;
+        padding: 8px !important;
+      }
+      .icon-only i { margin: 0; font-size: 14px; }
+      .icon-row {
+        display: flex;
+        gap: 8px;
+      }
+      .icon-row .icon-only {
+        flex: 1;
+      }
       #loginGate { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #071019; z-index: 1000; }
       #loginBox { width: 340px; background: #0f1f2d; border: 1px solid #2a4960; border-radius: 12px; padding: 16px; }
       #logBox { display: none; margin-top: 10px; }
@@ -54,22 +89,26 @@
     <div class="wrap">
       <div class="card">
         <div class="top">
-          <div>
+          <div class="top-left">
+            <span id="connDot" class="conn-dot"></span>
+            <div>
             <div style="font-weight:800;">PTT Voice</div>
             <div id="whoami" class="small">-</div>
+            </div>
           </div>
-          <button id="btnLogout" style="width:auto;padding:8px 10px;">Logout</button>
+          <button id="btnLogout" class="icon-btn" style="width:auto;padding:8px 10px;" title="Logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
         </div>
 
         <div class="main-grid">
           <div>
             <div class="ptt-zone">
               <button id="pttBtn" disabled>HOLD TO TALK</button>
-              <div id="pttHint" class="small">Connecting...</div>
+              <div id="pttHint" class="small" style="display:none;"></div>
             </div>
-            <div id="status" class="status">Status: idle</div>
+            <div id="status" class="status"></div>
           </div>
           <div class="right-stack">
+            <div id="channelWrap">
             <label>Channel</label>
             <select id="channelId">
               <option value="engineering">engineering</option>
@@ -77,9 +116,12 @@
               <option value="security">security</option>
               <option value="all-call">all-call</option>
             </select>
-            <button id="btnSpeaker">Enable Speaker</button>
-            <button id="btnReconnect">Reconnect</button>
-            <button id="btnToggleLog">Show Log</button>
+            </div>
+            <div class="icon-row">
+              <button id="btnSpeaker" class="icon-btn icon-only" title="Enable Speaker"><i class="fa-solid fa-volume-high"></i></button>
+              <button id="btnReconnect" class="icon-btn icon-only" title="Reconnect"><i class="fa-solid fa-rotate-right"></i></button>
+              <button id="btnToggleLog" class="icon-btn icon-only" title="Show Log"><i class="fa-solid fa-terminal"></i></button>
+            </div>
           </div>
         </div>
 
@@ -104,12 +146,15 @@
         const line = obj ? `${msg} ${JSON.stringify(obj)}` : msg;
         logEl.textContent = `${new Date().toISOString()} ${line}\n${logEl.textContent}`.slice(0, 6000);
       }
-      function setStatus(t) { document.getElementById("status").textContent = `Status: ${t}`; }
+      function setConnected(on) {
+        const dot = document.getElementById("connDot");
+        dot.classList.toggle("on", Boolean(on));
+      }
+      function setStatus(t) { document.getElementById("status").textContent = t; }
       function setPttEnabled(on) {
         state.floorGranted = on;
         if (state.outboundTrack) state.outboundTrack.enabled = on;
         pttBtn.classList.toggle("active", on);
-        document.getElementById("pttHint").textContent = on ? "Talking..." : "Press and hold to talk";
       }
       function sendWs(payload) {
         if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
@@ -152,6 +197,9 @@
       }
       async function setupLocalAudio() {
         if (state.localStream) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("microphone API unavailable. open via HTTPS (or localhost), then allow mic permission");
+        }
         const raw = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         state.rawMicTrack = raw.getAudioTracks()[0];
         state.localStream = raw;
@@ -220,8 +268,18 @@
           sendWs({ type: "floor_state", channelId: state.channelId });
           state.joined = true;
           pttBtn.disabled = false;
-          document.getElementById("pttHint").textContent = "Press and hold to talk";
-          setStatus("connected");
+          setConnected(true);
+          setStatus("");
+        };
+        state.ws.onclose = () => {
+          state.joined = false;
+          pttBtn.disabled = true;
+          setConnected(false);
+          setStatus("Disconnected");
+        };
+        state.ws.onerror = () => {
+          setConnected(false);
+          setStatus("Connection error");
         };
         state.ws.onmessage = async (event) => {
           const msg = JSON.parse(event.data);
@@ -261,8 +319,8 @@
           try {
             await connectVoice();
           } catch (e) {
-            setStatus(`connect failed: ${e.message}`);
-            document.getElementById("pttHint").textContent = "Disconnected. Tap Reconnect.";
+            setConnected(false);
+            setStatus(`Connect failed: ${e.message}`);
             log("connect failed after login", { message: e.message });
           }
         } catch (e) {
@@ -321,10 +379,12 @@
           }
           state.joined = false;
           pttBtn.disabled = true;
-          setStatus("reconnecting...");
+          setConnected(false);
+          setStatus("Reconnecting...");
           await connectVoice();
         } catch (e) {
-          setStatus(`reconnect failed: ${e.message}`);
+          setConnected(false);
+          setStatus(`Reconnect failed: ${e.message}`);
           log("reconnect failed", { message: e.message });
         }
       };
@@ -332,7 +392,7 @@
         const b = document.getElementById("logBox");
         const hidden = b.style.display === "none";
         b.style.display = hidden ? "block" : "none";
-        document.getElementById("btnToggleLog").textContent = hidden ? "Hide Log" : "Show Log";
+        document.getElementById("btnToggleLog").title = hidden ? "Hide Log" : "Show Log";
       };
       document.getElementById("channelId").onchange = () => {
         state.channelId = document.getElementById("channelId").value;
@@ -343,6 +403,11 @@
         const params = new URLSearchParams(location.search);
         const c = localStorage.getItem("poc_voice_channel") || "engineering";
         document.getElementById("channelId").value = params.get("channelId") || c;
+        // When opened inside dispatcher quick-PTT panel, parent controls channel.
+        if (params.get("embedded") === "1") {
+          const cw = document.getElementById("channelWrap");
+          if (cw) cw.style.display = "none";
+        }
         const u = params.get("userId") || localStorage.getItem("poc_voice_user_id") || "";
         const d = params.get("deviceId") || localStorage.getItem("poc_voice_device_id") || "";
         if (u) document.getElementById("loginUserId").value = u;

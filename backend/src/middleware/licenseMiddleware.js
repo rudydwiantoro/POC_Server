@@ -1,7 +1,9 @@
 const { assertLicenseActive } = require("../services/licenseService");
+const { bypassLicenseValidation } = require("../config/env");
 
 async function requireActiveLicense(_req, res, next) {
   const req = _req;
+  if (bypassLicenseValidation) return next();
   // Dispatcher must be able to enter dispatch console to set the first license key.
   if (req.baseUrl === "/api/dispatch" && req.auth && req.auth.role === "dispatcher") {
     return next();

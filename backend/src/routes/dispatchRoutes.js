@@ -13,6 +13,7 @@ const { pool } = require("../db/pool");
 const { getUserPttMessages } = require("../services/pttMessageService");
 const { getUserPttImages } = require("../services/pttImageService");
 const { getLicenseStatus, setLicenseKey, verifyDeviceActivationKey } = require("../services/licenseService");
+const { bypassDeviceValidation } = require("../config/env");
 
 const router = express.Router();
 const MENU_KEYS = [
@@ -204,15 +205,17 @@ router.post("/admin/devices/activate", async (req, res) => {
   }
   try {
     const userId = req.body && req.body.userId ? String(req.body.userId).trim() : "";
-    const deviceId = req.body && req.body.deviceId ? String(req.body.deviceId).trim() : "";
+    const deviceId = req.body && req.body.deviceId ? String(req.body.deviceId).trim() : (bypassDeviceValidation ? `auto-${userId}` : "");
     const deviceKey = req.body && req.body.deviceKey ? String(req.body.deviceKey).trim() : "";
     const platform = req.body && req.body.platform ? String(req.body.platform).trim() : "android";
-    if (!userId || !deviceId || !deviceKey) {
-      return res.status(400).json({ error: "userId, deviceId, deviceKey are required" });
+    if (!userId || !deviceId || (!bypassDeviceValidation && !deviceKey)) {
+      return res.status(400).json({ error: bypassDeviceValidation ? "userId is required" : "userId, deviceId, deviceKey are required" });
     }
-    const parsed = verifyDeviceActivationKey(deviceKey);
-    if (String(parsed.userId || "") !== userId) return res.status(400).json({ error: "device_key_user_mismatch" });
-    if (String(parsed.deviceId || "") !== deviceId) return res.status(400).json({ error: "device_key_device_mismatch" });
+    if (!bypassDeviceValidation) {
+      const parsed = verifyDeviceActivationKey(deviceKey);
+      if (String(parsed.userId || "") !== userId) return res.status(400).json({ error: "device_key_user_mismatch" });
+      if (String(parsed.deviceId || "") !== deviceId) return res.status(400).json({ error: "device_key_device_mismatch" });
+    }
     const activated = await activateDeviceForUser(userId, deviceId, platform);
     if (!activated) return res.status(404).json({ error: "user_not_found" });
     return res.json({ success: true, activated: { userId, deviceId, platform } });

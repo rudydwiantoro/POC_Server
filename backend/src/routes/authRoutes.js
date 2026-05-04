@@ -1,28 +1,39 @@
 const express = require("express");
 const { issueAccessToken, issueRefreshToken, verifyToken } = require("../services/tokenService");
-const { getAllowedChannelsForUser, getUserWithDevice } = require("../services/accessService");
+const { getAllowedChannelsForUser, getUserWithDevice, getUserWithAnyDevice, activateDeviceForUser } = require("../services/accessService");
 const { getLicenseStatus } = require("../services/licenseService");
 const { pool } = require("../db/pool");
+const { bypassLicenseValidation, bypassDeviceValidation } = require("../config/env");
 
 const router = express.Router();
 
 router.post("/login", async (req, res) => {
   const { userId, deviceId } = req.body || {};
-  if (!userId || !deviceId) {
-    return res.status(400).json({ error: "userId and deviceId are required" });
+  if (!userId || (!bypassDeviceValidation && !deviceId)) {
+    return res.status(400).json({ error: bypassDeviceValidation ? "userId is required" : "userId and deviceId are required" });
   }
 
   try {
-    const account = await getUserWithDevice(userId, deviceId);
+    let account = null;
+    if (bypassDeviceValidation) {
+      account = await getUserWithAnyDevice(userId);
+      if (account && !account.device_id) {
+        const autoLabel = String(deviceId || `auto-${userId}`).trim();
+        await activateDeviceForUser(userId, autoLabel, "android");
+        account = await getUserWithAnyDevice(userId);
+      }
+    } else {
+      account = await getUserWithDevice(userId, deviceId);
+    }
     if (!account) {
       return res.status(403).json({ error: "device_not_activated_on_server" });
     }
     const lic = await getLicenseStatus();
-    if (!lic.active && account.role !== "dispatcher") {
+    if (!bypassLicenseValidation && !lic.active && account.role !== "dispatcher") {
       return res.status(403).json({ error: lic.reason || "license_inactive" });
     }
     const totalDeviceRes = await pool.query("SELECT COUNT(1)::int AS total FROM devices");
-    if (lic.active && Number(totalDeviceRes.rows[0].total) > Number(lic.maxDevices)) {
+    if (!bypassLicenseValidation && lic.active && Number(totalDeviceRes.rows[0].total) > Number(lic.maxDevices)) {
       return res.status(403).json({ error: "license_max_devices_exceeded" });
     }
 
@@ -68,16 +79,26 @@ router.post("/login", async (req, res) => {
 
 router.post("/activation/check", async (req, res) => {
   const { userId, deviceId } = req.body || {};
-  if (!userId || !deviceId) {
-    return res.status(400).json({ error: "userId and deviceId are required" });
+  if (!userId || (!bypassDeviceValidation && !deviceId)) {
+    return res.status(400).json({ error: bypassDeviceValidation ? "userId is required" : "userId and deviceId are required" });
   }
   try {
-    const account = await getUserWithDevice(userId, deviceId);
+    let account = null;
+    if (bypassDeviceValidation) {
+      account = await getUserWithAnyDevice(userId);
+      if (account && !account.device_id) {
+        const autoLabel = String(deviceId || `auto-${userId}`).trim();
+        await activateDeviceForUser(userId, autoLabel, "android");
+        account = await getUserWithAnyDevice(userId);
+      }
+    } else {
+      account = await getUserWithDevice(userId, deviceId);
+    }
     if (!account) {
       return res.json({ activated: false, reason: "device_not_activated_on_server" });
     }
     const lic = await getLicenseStatus();
-    if (!lic.active && account.role !== "dispatcher") {
+    if (!bypassLicenseValidation && !lic.active && account.role !== "dispatcher") {
       return res.json({ activated: false, reason: lic.reason || "license_inactive" });
     }
     return res.json({

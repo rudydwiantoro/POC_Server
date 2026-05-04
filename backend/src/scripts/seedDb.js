@@ -26,13 +26,27 @@ async function run() {
     `);
 
     await client.query(`
-      INSERT INTO devices (id, user_id, device_label, platform) VALUES
-      ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'd1', 'android'),
-      ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'hk-device', 'android'),
-      ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', 'sec-device', 'android'),
-      ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000004', 'desk1', 'web')
+      INSERT INTO devices (
+        id, user_id, device_label, platform,
+        beacon_enabled, beacon_interval_min, beacon_distance_km,
+        beacon_mode, beacon_batch_size, beacon_batch_max_wait_min, beacon_normal_send_min
+      ) VALUES
+      ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'd1', 'android', true, 15, 1.0, 'normal', 50, 120, 60),
+      ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'hk-device', 'android', true, 15, 1.0, 'eco', 50, 120, 60),
+      ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', 'sec-device', 'android', true, 15, 1.0, 'normal', 50, 120, 60),
+      ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000004', 'desk1', 'web', false, 15, 1.0, 'normal', 50, 120, 60)
       ON CONFLICT (id) DO UPDATE
-      SET user_id = EXCLUDED.user_id, device_label = EXCLUDED.device_label, platform = EXCLUDED.platform
+      SET
+        user_id = EXCLUDED.user_id,
+        device_label = EXCLUDED.device_label,
+        platform = EXCLUDED.platform,
+        beacon_enabled = EXCLUDED.beacon_enabled,
+        beacon_interval_min = EXCLUDED.beacon_interval_min,
+        beacon_distance_km = EXCLUDED.beacon_distance_km,
+        beacon_mode = EXCLUDED.beacon_mode,
+        beacon_batch_size = EXCLUDED.beacon_batch_size,
+        beacon_batch_max_wait_min = EXCLUDED.beacon_batch_max_wait_min,
+        beacon_normal_send_min = EXCLUDED.beacon_normal_send_min
     `);
 
     await client.query(`

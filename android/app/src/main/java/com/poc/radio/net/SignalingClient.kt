@@ -16,6 +16,7 @@ class SignalingClient(
     interface Callback {
         fun onStatus(status: String)
         fun onFloorHolder(userId: String?)
+        fun onPttTextMessage(userId: String?, text: String)
         fun onError(message: String)
     }
 
@@ -29,19 +30,7 @@ class SignalingClient(
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     callback.onStatus("connected")
-                    webSocket.send(
-                        JSONObject()
-                            .put("type", "join_channel")
-                            .put("userId", userId)
-                            .put("channelId", channelIdProvider())
-                            .toString()
-                    )
-                    webSocket.send(
-                        JSONObject()
-                            .put("type", "floor_state")
-                            .put("channelId", channelIdProvider())
-                            .toString()
-                    )
+                    switchChannel(channelIdProvider())
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -62,6 +51,10 @@ class SignalingClient(
                                 callback.onFloorHolder(holder?.optString("userId"))
                             }
                             "floor_released" -> callback.onFloorHolder(null)
+                            "ptt_text" -> {
+                                val sender = if (msg.has("userId")) msg.optString("userId") else null
+                                callback.onPttTextMessage(sender, msg.optString("text", ""))
+                            }
                             "error" -> callback.onError(msg.optString("message", "signaling error"))
                         }
                     }.onFailure { callback.onError(it.message ?: "parse error") }
@@ -94,5 +87,32 @@ class SignalingClient(
         ws?.close(1000, "bye")
         ws = null
         callback.onStatus("disconnected")
+    }
+
+    fun switchChannel(channelId: String) {
+        ws?.send(
+            JSONObject()
+                .put("type", "join_channel")
+                .put("userId", userId)
+                .put("channelId", channelId)
+                .toString()
+        )
+        ws?.send(
+            JSONObject()
+                .put("type", "floor_state")
+                .put("channelId", channelId)
+                .toString()
+        )
+    }
+
+    fun sendPttText(channelId: String, text: String) {
+        ws?.send(
+            JSONObject()
+                .put("type", "ptt_text")
+                .put("userId", userId)
+                .put("channelId", channelId)
+                .put("text", text)
+                .toString()
+        )
     }
 }

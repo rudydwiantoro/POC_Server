@@ -35,6 +35,44 @@
         android:textSize="20sp" />
 
     <TextView
+        android:id="@+id/tvMiniDisplayLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Mini Display (1 baris)"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/tvMiniDisplay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#EEEEEE"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:padding="8dp"
+        android:text="-"
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/etShortMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:enabled="false"
+        android:hint="Ketik short message (max 160)"
+        android:inputType="textCapSentences"
+        android:maxLength="160"
+        android:maxLines="1" />
+
+    <Button
+        android:id="@+id/btnSendShortMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:enabled="false"
+        android:text="Send Short Message" />
+
+    <TextView
         android:id="@+id/tvFloorStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

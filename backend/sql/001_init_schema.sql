@@ -93,6 +93,14 @@ CREATE TABLE IF NOT EXISTS ptt_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS ptt_text_messages (
+  id UUID PRIMARY KEY,
+  channel_id UUID NOT NULL REFERENCES channels(id),
+  speaker_user_id UUID NOT NULL REFERENCES users(id),
+  message_text VARCHAR(160) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_location_points_device_time
   ON location_points(device_id, recorded_at DESC);
 
@@ -105,3 +113,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ptt_sessions_one_active_per_channel
 
 CREATE INDEX IF NOT EXISTS idx_ptt_messages_speaker_time
   ON ptt_messages(speaker_user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ptt_text_messages_channel_time
+  ON ptt_text_messages(channel_id, created_at DESC);

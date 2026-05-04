@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const crypto = require("crypto");
 const {
   canEmergencyOverride,
   getVisibleChannels,
@@ -511,6 +512,96 @@ router.get("/admin/menu-permissions/users", async (req, res) => {
     return res.json({ menuKeys: MENU_KEYS, users });
   } catch (_error) {
     return res.status(500).json({ error: "failed to load user permissions" });
+  }
+});
+
+router.get("/admin/users", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  try {
+    const { rows } = await pool.query(`
+      SELECT u.id, u.username, u.display_name, u.role,
+             COALESCE(array_agg(d.device_label ORDER BY d.device_label) FILTER (WHERE d.device_label IS NOT NULL), '{}') AS devices
+      FROM users u
+      LEFT JOIN devices d ON d.user_id = u.id
+      GROUP BY u.id, u.username, u.display_name, u.role
+      ORDER BY u.username ASC
+    `);
+    return res.json({ users: rows.map((r) => ({ id: r.id, userId: r.username, displayName: r.display_name, role: r.role, devices: r.devices || [] })) });
+  } catch (_e) {
+    return res.status(500).json({ error: "failed to load users" });
+  }
+});
+
+router.post("/admin/users", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  const userId = String(req.body?.userId || "").trim();
+  const displayName = String(req.body?.displayName || "").trim();
+  const role = String(req.body?.role || "operator").trim();
+  const deviceId = String(req.body?.deviceId || "").trim();
+  if (!userId || !displayName) return res.status(400).json({ error: "userId and displayName are required" });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const userDbId = crypto.randomUUID();
+    await client.query(`INSERT INTO users (id, username, display_name, role) VALUES ($1, $2, $3, $4)`, [userDbId, userId, displayName, role]);
+    if (deviceId) {
+      await client.query(`INSERT INTO devices (id, user_id, device_label, platform) VALUES ($1, $2, $3, $4)`, [crypto.randomUUID(), userDbId, deviceId, "android"]);
+    }
+    await client.query("COMMIT");
+    return res.json({ success: true, userId });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    return res.status(400).json({ error: e.message || "failed to create user" });
+  } finally {
+    client.release();
+  }
+});
+
+router.put("/admin/users/:userId", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  const username = String(req.params.userId || "").trim();
+  const displayName = String(req.body?.displayName || "").trim();
+  const role = String(req.body?.role || "").trim();
+  if (!username) return res.status(400).json({ error: "userId is required" });
+  try {
+    const sets = [];
+    const vals = [];
+    if (displayName) { vals.push(displayName); sets.push(`display_name = $${vals.length}`); }
+    if (role) { vals.push(role); sets.push(`role = $${vals.length}`); }
+    if (!sets.length) return res.status(400).json({ error: "nothing to update" });
+    vals.push(username);
+    const r = await pool.query(`UPDATE users SET ${sets.join(", ")} WHERE username = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: "user not found" });
+    return res.json({ success: true, userId: username });
+  } catch (_e) {
+    return res.status(500).json({ error: "failed to update user" });
+  }
+});
+
+router.delete("/admin/users/:userId", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  const username = String(req.params.userId || "").trim();
+  if (!username) return res.status(400).json({ error: "userId is required" });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const ur = await client.query(`SELECT id FROM users WHERE username = $1 LIMIT 1`, [username]);
+    if (!ur.rows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "user not found" });
+    }
+    const uid = ur.rows[0].id;
+    await client.query(`DELETE FROM user_menu_permissions WHERE user_id = $1`, [uid]);
+    await client.query(`DELETE FROM channel_members WHERE user_id = $1`, [uid]);
+    await client.query(`DELETE FROM devices WHERE user_id = $1`, [uid]);
+    await client.query(`DELETE FROM users WHERE id = $1`, [uid]);
+    await client.query("COMMIT");
+    return res.json({ success: true, userId: username });
+  } catch (_e) {
+    await client.query("ROLLBACK");
+    return res.status(500).json({ error: "failed to delete user" });
+  } finally {
+    client.release();
   }
 });
 

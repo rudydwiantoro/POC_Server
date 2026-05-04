@@ -104,6 +104,7 @@
         <button class="tab-btn" data-tab="serverTab">Server Config</button>
         <button class="tab-btn" data-tab="geofenceTab">Geofence</button>
         <button class="tab-btn" data-tab="permTab">Permissions</button>
+        <button class="tab-btn" data-tab="usersTab">Users</button>
         <button class="tab-btn" data-tab="beaconTab">Beacon</button>
         <button class="tab-btn" data-tab="backupTab">Backup</button>
       </div>
@@ -161,6 +162,28 @@
         <select id="userSelect"></select>
         <div id="userPermList" class="small"></div>
         <button id="btnSaveUserPerm">Save User Permission</button>
+      </div>
+      </div>
+
+      <div id="usersTab" class="tab-panel">
+      <div class="card">
+        <div><b>User CRUD</b></div>
+        <label for="crudUserId">User ID</label>
+        <input id="crudUserId" placeholder="mis. u2" />
+        <label for="crudDisplayName">Display Name</label>
+        <input id="crudDisplayName" placeholder="mis. Engineering User 2" />
+        <label for="crudRole">Role</label>
+        <select id="crudRole">
+          <option value="operator">operator</option>
+          <option value="dispatcher">dispatcher</option>
+        </select>
+        <label for="crudDeviceId">Device ID (optional)</label>
+        <input id="crudDeviceId" placeholder="mis. d2" />
+        <button id="btnCreateUser">Create User</button>
+        <button id="btnUpdateUser">Update User</button>
+        <button id="btnDeleteUser">Delete User</button>
+        <button id="btnRefreshUsers">Refresh Users</button>
+        <div id="usersList" class="small">No users loaded yet.</div>
       </div>
       </div>
 
@@ -260,7 +283,22 @@
         await loadLicenseInfo();
         await loadPermissionAdminData();
         await loadDeviceBeaconAdmin();
+        await loadUsersCrud();
         document.getElementById("loginGate").style.display = "none";
+      }
+
+      async function loadUsersCrud() {
+        try {
+          const data = await api("/api/dispatch/admin/users");
+          const users = Array.isArray(data.users) ? data.users : [];
+          if (!users.length) {
+            setText("usersList", "No users.");
+            return;
+          }
+          setText("usersList", users.map((u) => `- ${u.userId} | ${u.displayName} | ${u.role} | devices: ${(u.devices || []).join(", ") || "-"}`).join("\n"));
+        } catch (e) {
+          setText("usersList", `Failed to load users: ${e.message}`);
+        }
       }
 
       async function loadPermissionAdminData() {
@@ -432,6 +470,55 @@
         } catch (e) {
           setText("mapInfo", `Save user permission failed: ${e.message}`);
         }
+      };
+      document.getElementById("btnCreateUser").onclick = async () => {
+        try {
+          await api("/api/dispatch/admin/users", {
+            method: "POST",
+            body: JSON.stringify({
+              userId: document.getElementById("crudUserId").value.trim(),
+              displayName: document.getElementById("crudDisplayName").value.trim(),
+              role: document.getElementById("crudRole").value,
+              deviceId: document.getElementById("crudDeviceId").value.trim()
+            })
+          });
+          await loadUsersCrud();
+          await loadPermissionAdminData();
+          setText("mapInfo", "User created.");
+        } catch (e) {
+          setText("mapInfo", `Create user failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnUpdateUser").onclick = async () => {
+        const userId = document.getElementById("crudUserId").value.trim();
+        try {
+          await api(`/api/dispatch/admin/users/${encodeURIComponent(userId)}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              displayName: document.getElementById("crudDisplayName").value.trim(),
+              role: document.getElementById("crudRole").value
+            })
+          });
+          await loadUsersCrud();
+          await loadPermissionAdminData();
+          setText("mapInfo", "User updated.");
+        } catch (e) {
+          setText("mapInfo", `Update user failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnDeleteUser").onclick = async () => {
+        const userId = document.getElementById("crudUserId").value.trim();
+        try {
+          await api(`/api/dispatch/admin/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+          await loadUsersCrud();
+          await loadPermissionAdminData();
+          setText("mapInfo", "User deleted.");
+        } catch (e) {
+          setText("mapInfo", `Delete user failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnRefreshUsers").onclick = () => {
+        loadUsersCrud();
       };
       document.getElementById("beaconDeviceSelect").onchange = onBeaconDeviceSelected;
       document.getElementById("btnSaveBeaconSetting").onclick = async () => {

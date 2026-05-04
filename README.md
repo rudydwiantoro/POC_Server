@@ -16,6 +16,10 @@ npm install
 cp .env.example .env
 ```
 4. Isi koneksi DB di `.env` (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`).
+   Opsi recycle/cleanup:
+   - `CLEANUP_ENABLED=true`
+   - `CLEANUP_INTERVAL_MINUTES=60`
+   - `CLEANUP_DEFAULT_RETENTION_DAYS=30`
 5. Opsional untuk auto device setting (APK):
 - set `PUBLIC_BASE_URL=https://your-domain.com` di `.env` jika domain publik berbeda dari host request.
 5. Init schema + seed:
@@ -137,6 +141,13 @@ Additional tables:
 - `ptt_messages`
 - `ptt_text_messages`
 - `ptt_image_messages`
+- `recycle_policies`
+- `recycle_cleanup_logs`
+
+Recycle policy default:
+- Target `ptt_voice_messages`, `location_points_log`, `ptt_text_messages`, `ptt_image_messages`
+- Data/file lebih lama dari `retention_days` akan dihapus otomatis oleh scheduler backend.
+- Nilai hari bisa diubah per target di tabel `recycle_policies`.
 
 Jika upgrade dari schema lama:
 ```bash

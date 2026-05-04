@@ -4,6 +4,9 @@ dotenv.config();
 
 module.exports = {
   port: Number(process.env.PORT || 3100),
+  cleanupEnabled: process.env.CLEANUP_ENABLED !== "false",
+  cleanupIntervalMinutes: Number(process.env.CLEANUP_INTERVAL_MINUTES || 60),
+  cleanupDefaultRetentionDays: Number(process.env.CLEANUP_DEFAULT_RETENTION_DAYS || 30),
   jwtSecret: process.env.JWT_SECRET || "replace_me_in_dev",
   generatorAdminUser: process.env.GENERATOR_ADMIN_USER || "superadmin",
   generatorAdminPass: process.env.GENERATOR_ADMIN_PASS || "superadmin123",

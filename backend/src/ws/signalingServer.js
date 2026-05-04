@@ -5,6 +5,7 @@ const { savePttTextMessage } = require("../services/pttTextService");
 const { registerBroadcaster } = require("./signalBus");
 const { getLicenseStatus } = require("../services/licenseService");
 const { setDeviceOnline, setDeviceOffline, getOnlineDeviceCount, isDeviceOnline } = require("./onlineState");
+const { bypassLicenseValidation } = require("../config/env");
 
 function send(ws, payload) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -47,7 +48,7 @@ function createSignalingServer(httpServer) {
 
         if (msg.type === "join_channel") {
           const lic = await getLicenseStatus();
-          if (!lic.active) {
+          if (!bypassLicenseValidation && !lic.active) {
             send(ws, { type: "error", message: lic.reason || "license inactive" });
             return;
           }
@@ -55,7 +56,7 @@ function createSignalingServer(httpServer) {
           state.channelId = msg.channelId || state.channelId;
           state.deviceId = msg.deviceId || state.deviceId;
           const alreadyOnline = state.deviceId ? isDeviceOnline(state.deviceId) : false;
-          if (!alreadyOnline && state.deviceId && getOnlineDeviceCount() >= Number(lic.maxOnlineDevices || 0)) {
+          if (!bypassLicenseValidation && !alreadyOnline && state.deviceId && getOnlineDeviceCount() >= Number(lic.maxOnlineDevices || 0)) {
             send(ws, { type: "error", message: "license_max_online_devices_exceeded" });
             return;
           }

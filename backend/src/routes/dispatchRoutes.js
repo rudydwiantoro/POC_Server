@@ -1,4 +1,7 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const { execFileSync } = require("child_process");
 const {
   canEmergencyOverride,
   getVisibleChannels,
@@ -10,6 +13,7 @@ const { pool } = require("../db/pool");
 const { getUserPttMessages } = require("../services/pttMessageService");
 const { getUserPttImages } = require("../services/pttImageService");
 const { getLicenseStatus, setLicenseKey, verifyDeviceActivationKey } = require("../services/licenseService");
+const { bypassDeviceValidation } = require("../config/env");
 
 const router = express.Router();
 const MENU_KEYS = [
@@ -75,21 +79,143 @@ router.put("/admin/license", async (req, res) => {
   }
 });
 
+router.post("/admin/backup", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  let sqlFilePath = "";
+  try {
+    const tRes = await pool.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      ORDER BY table_name ASC
+    `);
+    const tableNames = tRes.rows.map((r) => r.table_name);
+    const data = {};
+    for (const tableName of tableNames) {
+      const q = `SELECT * FROM "${tableName}"`;
+      const rows = await pool.query(q);
+      data[tableName] = rows.rows;
+    }
+
+    function sqlValue(v) {
+      if (v === null || v === undefined) return "NULL";
+      if (typeof v === "number") return Number.isFinite(v) ? String(v) : "NULL";
+      if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+      if (v instanceof Date) return `'${v.toISOString().replace(/'/g, "''")}'`;
+      if (Buffer.isBuffer(v)) return `'\\\\x${v.toString("hex")}'`;
+      if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
+      return `'${String(v).replace(/'/g, "''")}'`;
+    }
+
+    const sqlLines = [];
+    sqlLines.push("-- Auto generated database backup");
+    sqlLines.push(`-- Generated at: ${new Date().toISOString()}`);
+    sqlLines.push("");
+    sqlLines.push("BEGIN;");
+    sqlLines.push("");
+    for (const tableName of tableNames) {
+      const rows = data[tableName] || [];
+      sqlLines.push(`-- Table: ${tableName}`);
+      if (!rows.length) {
+        sqlLines.push("");
+        continue;
+      }
+      const cols = Object.keys(rows[0]);
+      const colSql = cols.map((c) => `"${c}"`).join(", ");
+      for (const r of rows) {
+        const valSql = cols.map((c) => sqlValue(r[c])).join(", ");
+        sqlLines.push(`INSERT INTO "${tableName}" (${colSql}) VALUES (${valSql});`);
+      }
+      sqlLines.push("");
+    }
+    sqlLines.push("COMMIT;");
+    sqlLines.push("");
+
+    const backupDir = path.join(__dirname, "..", "..", "..", "backup", "db");
+    fs.mkdirSync(backupDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const sqlFileName = `db-backup-${stamp}.sql`;
+    sqlFilePath = path.join(backupDir, sqlFileName);
+    fs.writeFileSync(sqlFilePath, sqlLines.join("\n"), "utf8");
+
+    const zipFileName = `db-backup-${stamp}.zip`;
+    const zipFilePath = path.join(backupDir, zipFileName);
+    execFileSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        `Compress-Archive -LiteralPath '${sqlFilePath.replace(/'/g, "''")}' -DestinationPath '${zipFilePath.replace(/'/g, "''")}' -Force`
+      ],
+      { stdio: "ignore" }
+    );
+    return res.json({
+      success: true,
+      fileName: zipFileName,
+      filePath: zipFilePath,
+      sqlFileName,
+      sqlFilePath: "(packed inside zip)",
+      totalTables: tableNames.length
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "failed_to_backup_db", detail: error.message });
+  } finally {
+    // Keep only one artifact on disk: ZIP.
+    if (sqlFilePath && fs.existsSync(sqlFilePath)) {
+      try {
+        fs.unlinkSync(sqlFilePath);
+      } catch (_e) {}
+    }
+  }
+});
+
+router.get("/admin/backup/list", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    const backupDir = path.join(__dirname, "..", "..", "..", "backup", "db");
+    if (!fs.existsSync(backupDir)) {
+      return res.json({ backupDir, files: [] });
+    }
+    const files = fs.readdirSync(backupDir)
+      .map((name) => {
+        const fullPath = path.join(backupDir, name);
+        const st = fs.statSync(fullPath);
+        return {
+          name,
+          path: fullPath,
+          size: st.size,
+          modifiedAt: st.mtime.toISOString()
+        };
+      })
+      .filter((f) => f.name.toLowerCase().endsWith(".zip"))
+      .sort((a, b) => (a.modifiedAt < b.modifiedAt ? 1 : -1));
+    return res.json({ backupDir, files });
+  } catch (error) {
+    return res.status(500).json({ error: "failed_to_list_backups", detail: error.message });
+  }
+});
+
 router.post("/admin/devices/activate", async (req, res) => {
   if (!canEmergencyOverride(req.auth.role)) {
     return res.status(403).json({ error: "dispatcher role required" });
   }
   try {
     const userId = req.body && req.body.userId ? String(req.body.userId).trim() : "";
-    const deviceId = req.body && req.body.deviceId ? String(req.body.deviceId).trim() : "";
+    const deviceId = req.body && req.body.deviceId ? String(req.body.deviceId).trim() : (bypassDeviceValidation ? `auto-${userId}` : "");
     const deviceKey = req.body && req.body.deviceKey ? String(req.body.deviceKey).trim() : "";
     const platform = req.body && req.body.platform ? String(req.body.platform).trim() : "android";
-    if (!userId || !deviceId || !deviceKey) {
-      return res.status(400).json({ error: "userId, deviceId, deviceKey are required" });
+    if (!userId || !deviceId || (!bypassDeviceValidation && !deviceKey)) {
+      return res.status(400).json({ error: bypassDeviceValidation ? "userId is required" : "userId, deviceId, deviceKey are required" });
     }
-    const parsed = verifyDeviceActivationKey(deviceKey);
-    if (String(parsed.userId || "") !== userId) return res.status(400).json({ error: "device_key_user_mismatch" });
-    if (String(parsed.deviceId || "") !== deviceId) return res.status(400).json({ error: "device_key_device_mismatch" });
+    if (!bypassDeviceValidation) {
+      const parsed = verifyDeviceActivationKey(deviceKey);
+      if (String(parsed.userId || "") !== userId) return res.status(400).json({ error: "device_key_user_mismatch" });
+      if (String(parsed.deviceId || "") !== deviceId) return res.status(400).json({ error: "device_key_device_mismatch" });
+    }
     const activated = await activateDeviceForUser(userId, deviceId, platform);
     if (!activated) return res.status(404).json({ error: "user_not_found" });
     return res.json({ success: true, activated: { userId, deviceId, platform } });

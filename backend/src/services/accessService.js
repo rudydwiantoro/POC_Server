@@ -77,6 +77,32 @@ async function getUserByUsername(username) {
   return rows[0] || null;
 }
 
+async function getUserWithAnyDevice(username) {
+  const sql = `
+    SELECT
+      u.id AS user_id,
+      u.username,
+      u.display_name,
+      u.role,
+      d.id AS device_id,
+      d.device_label,
+      d.beacon_enabled,
+      d.beacon_interval_min,
+      d.beacon_distance_km,
+      d.beacon_mode,
+      d.beacon_batch_size,
+      d.beacon_batch_max_wait_min,
+      d.beacon_normal_send_min
+    FROM users u
+    LEFT JOIN devices d ON d.user_id = u.id
+    WHERE u.username = $1
+    ORDER BY d.created_at ASC NULLS LAST
+    LIMIT 1
+  `;
+  const { rows } = await pool.query(sql, [username]);
+  return rows[0] || null;
+}
+
 async function getAllowedChannelsForUser(userId, role) {
   if (role === "dispatcher") {
     const { rows } = await pool.query(
@@ -136,6 +162,7 @@ module.exports = {
   getUserWithDevice,
   getOrCreateUserWithDevice,
   getUserByUsername,
+  getUserWithAnyDevice,
   getAllowedChannelsForUser,
   canAccessChannel,
   getVisibleChannels,

@@ -105,6 +105,7 @@
         <button class="tab-btn" data-tab="geofenceTab">Geofence</button>
         <button class="tab-btn" data-tab="permTab">Permissions</button>
         <button class="tab-btn" data-tab="beaconTab">Beacon</button>
+        <button class="tab-btn" data-tab="backupTab">Backup</button>
       </div>
 
       <div id="licenseTab" class="tab-panel active">
@@ -182,6 +183,17 @@
         <label for="beaconNormalSend">Normal Send Every (minutes)</label>
         <input id="beaconNormalSend" type="number" min="5" max="240" value="60" />
         <button id="btnSaveBeaconSetting">Save Beacon Setting</button>
+      </div>
+      </div>
+
+      <div id="backupTab" class="tab-panel">
+      <div class="card">
+        <div><b>Database Backup</b></div>
+        <div class="small">Backup all tables from schema `public` into SQL, then pack to ZIP in folder `backup/db`.</div>
+        <button id="btnRunBackup">Run Backup Now</button>
+        <button id="btnRefreshBackupList">Refresh Backup List</button>
+        <div id="backupInfo" class="small">No backup executed yet.</div>
+        <div id="backupList" class="small">No backups listed yet.</div>
       </div>
       </div>
       <div id="mapInfo" class="small"></div>
@@ -443,6 +455,37 @@
           setText("mapInfo", `Save beacon failed: ${e.message}`);
         }
       };
+      document.getElementById("btnRunBackup").onclick = async () => {
+        try {
+          const data = await api("/api/dispatch/admin/backup", { method: "POST" });
+          setText("backupInfo", `Backup ZIP: ${data.fileName}\nZIP Path: ${data.filePath}\nSQL File: ${data.sqlFileName}\nSQL Path: ${data.sqlFilePath}\nTables: ${data.totalTables}`);
+          await loadBackupList();
+          setText("mapInfo", "Database backup completed.");
+        } catch (e) {
+          setText("backupInfo", `Backup failed: ${e.message}`);
+          setText("mapInfo", `Backup failed: ${e.message}`);
+        }
+      };
+      async function loadBackupList() {
+        try {
+          const data = await api("/api/dispatch/admin/backup/list");
+          const files = Array.isArray(data.files) ? data.files : [];
+          if (!files.length) {
+            setText("backupList", `Folder: ${data.backupDir}\n(no backup files yet)`);
+            return;
+          }
+          const lines = [`Folder: ${data.backupDir}`];
+          for (const f of files) {
+            lines.push(`- ${f.name} | ${f.size} bytes | ${f.modifiedAt}`);
+          }
+          setText("backupList", lines.join("\n"));
+        } catch (e) {
+          setText("backupList", `Failed to load backup list: ${e.message}`);
+        }
+      }
+      document.getElementById("btnRefreshBackupList").onclick = () => {
+        loadBackupList();
+      };
 
       (async () => {
         const t = localStorage.getItem("poc_dispatch_access_token") || "";
@@ -454,6 +497,7 @@
         if (d) document.getElementById("deviceId").value = d;
         try {
           await enterAdminAfterAuth();
+          await loadBackupList();
         } catch (_e) {
           accessToken = "";
           localStorage.removeItem("poc_dispatch_access_token");

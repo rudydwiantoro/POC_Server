@@ -1121,7 +1121,7 @@
         const channelId = document.getElementById("quickPttChannel").value || "engineering";
         const dispatcherUserId = document.getElementById("userId").value.trim();
         const dispatcherDeviceId = document.getElementById("deviceId").value.trim();
-        const url = `/voice.html?userId=${encodeURIComponent(dispatcherUserId)}&deviceId=${encodeURIComponent(dispatcherDeviceId)}&channelId=${encodeURIComponent(channelId)}`;
+        const url = `/voice.html?embedded=1&userId=${encodeURIComponent(dispatcherUserId)}&deviceId=${encodeURIComponent(dispatcherDeviceId)}&channelId=${encodeURIComponent(channelId)}`;
         document.getElementById("quickPttFrame").src = url;
       }
       function openQuickPttSheet() {

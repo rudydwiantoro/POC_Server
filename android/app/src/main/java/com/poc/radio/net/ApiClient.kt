@@ -43,10 +43,11 @@ class ApiClient(
         val deviceId: String
     )
 
-    fun login(userId: String, deviceId: String): Result<LoginResult> = runCatching {
+    fun login(userId: String, deviceId: String?): Result<LoginResult> = runCatching {
+        val safeDeviceId = (deviceId ?: "").ifBlank { "android-auto" }
         val payload = JSONObject()
             .put("userId", userId)
-            .put("deviceId", deviceId)
+            .put("deviceId", safeDeviceId)
             .toString()
         val req = Request.Builder()
             .url("$baseUrl/api/auth/login")
@@ -61,7 +62,7 @@ class ApiClient(
                 accessToken = root.getString("accessToken"),
                 role = user.optString("role", "operator"),
                 userId = user.optString("userId", userId),
-                deviceId = user.optString("deviceId", deviceId),
+                deviceId = user.optString("deviceId", safeDeviceId),
                 beaconEnabled = user.optJSONObject("beacon")?.optBoolean("enabled", false) ?: false,
                 beaconIntervalMin = user.optJSONObject("beacon")?.optInt("intervalMin", 15) ?: 15,
                 beaconDistanceKm = user.optJSONObject("beacon")?.optDouble("distanceKm", 1.0) ?: 1.0,
@@ -185,10 +186,11 @@ class ApiClient(
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
     }
 
-    fun checkActivation(userId: String, deviceId: String): Result<ActivationCheckResult> = runCatching {
+    fun checkActivation(userId: String, deviceId: String?): Result<ActivationCheckResult> = runCatching {
+        val safeDeviceId = (deviceId ?: "").ifBlank { "android-auto" }
         val payload = JSONObject()
             .put("userId", userId)
-            .put("deviceId", deviceId)
+            .put("deviceId", safeDeviceId)
             .toString()
         val req = Request.Builder()
             .url("$baseUrl/api/auth/activation/check")

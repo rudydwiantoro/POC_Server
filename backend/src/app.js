@@ -8,16 +8,47 @@ const pttRoutes = require("./routes/pttRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const dispatchRoutes = require("./routes/dispatchRoutes");
 const { requireAuth } = require("./middleware/authMiddleware");
+const { publicBaseUrl } = require("./config/env");
 
 function createApp() {
   const app = express();
 
   app.use(cors());
-  app.use(express.json({ limit: "1mb" }));
+  app.use(express.json({ limit: "12mb" }));
   app.use(express.static(path.join(__dirname, "..", "public")));
+  app.use("/media", express.static(path.join(__dirname, "..", "uploads")));
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, service: "pocserver-backend" });
+  });
+
+  app.get("/api/public/server-config", (req, res) => {
+    const hostBase = `${req.protocol}://${req.get("host")}`;
+    const baseUrl = publicBaseUrl || hostBase;
+    const wsUrl = baseUrl.replace(/^http/i, "ws").replace(/\/+$/, "") + "/ws/signaling";
+    return res.json({
+      version: 1,
+      appName: "PoC Radio",
+      httpBaseUrl: baseUrl,
+      wsUrl,
+      healthUrl: `${baseUrl.replace(/\/+$/, "")}/api/health`,
+      generatedAt: new Date().toISOString()
+    });
+  });
+
+  app.get("/.well-known/poc-radio-server-config.json", (req, res) => {
+    const hostBase = `${req.protocol}://${req.get("host")}`;
+    const baseUrl = publicBaseUrl || hostBase;
+    const wsUrl = baseUrl.replace(/^http/i, "ws").replace(/\/+$/, "") + "/ws/signaling";
+    return res.json({
+      version: 1,
+      appName: "PoC Radio",
+      httpBaseUrl: baseUrl,
+      wsUrl,
+      healthUrl: `${baseUrl.replace(/\/+$/, "")}/api/health`,
+      fetchedFrom: "/.well-known/poc-radio-server-config.json",
+      generatedAt: new Date().toISOString()
+    });
   });
 
   app.use("/api/auth", authRoutes);

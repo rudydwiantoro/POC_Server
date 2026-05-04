@@ -24,6 +24,16 @@ Jika login gagal:
 - pastikan user-device benar,
 - cek server/backend aktif.
 
+## 2.1 Guide Untuk User Baru Install APK
+Di dispatcher tersedia panel `Guide & Device Setting`.
+
+Langkah cepat:
+1. Klik `Get Server Setting Otomatis`.
+2. Klik `Copy HTTP Base URL` dan `Copy WS URL`.
+3. Di HP user: buka app -> `Server Config`.
+4. Paste URL hasil copy, lalu `Save`.
+5. Kembali ke login app dan masuk dengan `User ID` + `Device ID`.
+
 ## 3. Membaca Tampilan
 Panel kiri:
 - filter channel,
@@ -38,6 +48,9 @@ Panel tengah:
 Panel kanan:
 - KPI (`Active`, `Offline`, `With GPS`, `Talking Now`),
 - `Recent Operations` (event GPS, PTT, geofence).
+- `Selected Staff Action`:
+- tombol `Talk`,
+- daftar voice history terakhir + audio player replay.
 
 ## 4. Tracking Staff
 1. Pilih channel di `Channel Group` (atau `All Channels`).
@@ -48,6 +61,21 @@ Panel kanan:
 - waktu GPS terakhir,
 - akurasi GPS,
 - channel PTT terakhir.
+5. Untuk replay pembicaraan:
+- klik staff pada list atau marker map,
+- buka panel `Selected Staff Action`,
+- atur filter jika perlu:
+- `Channel`,
+- `From` (jam awal),
+- `To` (jam akhir),
+- `Limit`,
+- klik `Apply Filter`,
+- pilih rekaman berdasarkan jam,
+- klik `Play`.
+
+## 4.1 Tombol Talk
+Setelah staff dipilih, klik `Talk` untuk membuka `voice.html` di tab baru dengan channel staff tersebut.
+Ini dipakai dispatcher untuk masuk komunikasi cepat pada channel yang sama.
 
 ## 5. Geofence Alert
 Geofence area kerja default:

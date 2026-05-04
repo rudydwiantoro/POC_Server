@@ -81,6 +81,18 @@ CREATE TABLE IF NOT EXISTS user_menu_permissions (
   PRIMARY KEY (user_id, menu_key)
 );
 
+CREATE TABLE IF NOT EXISTS ptt_messages (
+  id UUID PRIMARY KEY,
+  session_id UUID REFERENCES ptt_sessions(id),
+  channel_id UUID NOT NULL REFERENCES channels(id),
+  speaker_user_id UUID NOT NULL REFERENCES users(id),
+  device_id UUID REFERENCES devices(id),
+  audio_path TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  duration_ms INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_location_points_device_time
   ON location_points(device_id, recorded_at DESC);
 
@@ -90,3 +102,6 @@ CREATE INDEX IF NOT EXISTS idx_ptt_sessions_channel_time
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ptt_sessions_one_active_per_channel
   ON ptt_sessions(channel_id)
   WHERE ended_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_ptt_messages_speaker_time
+  ON ptt_messages(speaker_user_id, created_at DESC);

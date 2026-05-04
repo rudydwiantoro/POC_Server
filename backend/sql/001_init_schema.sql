@@ -11,6 +11,13 @@ CREATE TABLE IF NOT EXISTS devices (
   user_id UUID NOT NULL REFERENCES users(id),
   device_label TEXT NOT NULL,
   platform TEXT NOT NULL,
+  beacon_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  beacon_interval_min INTEGER NOT NULL DEFAULT 15,
+  beacon_distance_km DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+  beacon_mode TEXT NOT NULL DEFAULT 'normal',
+  beacon_batch_size INTEGER NOT NULL DEFAULT 50,
+  beacon_batch_max_wait_min INTEGER NOT NULL DEFAULT 120,
+  beacon_normal_send_min INTEGER NOT NULL DEFAULT 60,
   last_seen_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -74,10 +74,12 @@ Channels/PTT:
 Location:
 - `POST /api/location/update`
 - `GET /api/location/latest`
+- `GET /api/location/history/:deviceId?from=<iso>&to=<iso>&limit=<n>`
 
 Dispatch:
 - `GET /api/dispatch/overview`
 - `GET /api/dispatch/tracking/overview`
+- `GET /api/dispatch/tracking/route?deviceId=<id>&from=<iso>&to=<iso>&limit=<n>`
 - `GET /api/dispatch/geofences`
 - `PUT /api/dispatch/geofences`
 - `GET /api/dispatch/menu-permissions/me`
@@ -85,6 +87,10 @@ Dispatch:
 - `PUT /api/dispatch/admin/menu-permissions/roles/:role`
 - `GET /api/dispatch/admin/menu-permissions/users`
 - `PUT /api/dispatch/admin/menu-permissions/users/:userId`
+- `GET /api/dispatch/admin/devices`
+- `PUT /api/dispatch/admin/devices/:deviceId/beacon`
+  - payload supports: `enabled`, `intervalMin`, `distanceKm`, `mode` (`normal|eco`),
+    `batchSize`, `batchMaxWaitMin`, `normalSendMin`
 - `POST /api/dispatch/emergency/override`
 - `GET /api/dispatch/staff/:userId/messages?limit=<n>`
 - `GET /api/dispatch/staff/:userId/messages?limit=<n>&channelId=<id>&from=<iso>&to=<iso>`
@@ -132,6 +138,8 @@ Atau jika ingin migration terpisah untuk DB existing:
 ```bash
 psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/002_add_ptt_text_messages.sql
 psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/003_add_ptt_image_messages.sql
+psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/004_add_device_beacon_settings.sql
+psql -h <DB_HOST> -U <DB_USER> -d <DB_NAME> -f sql/migrations/005_add_beacon_mode_batch_settings.sql
 ```
 
 ## Operation Manual

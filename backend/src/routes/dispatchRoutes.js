@@ -1,5 +1,10 @@
 const express = require("express");
-const { canEmergencyOverride, getVisibleChannels } = require("../services/accessService");
+const {
+  canEmergencyOverride,
+  getVisibleChannels,
+  listDevicesForAdmin,
+  updateDeviceBeaconSetting
+} = require("../services/accessService");
 const { pool } = require("../db/pool");
 const { getUserPttMessages } = require("../services/pttMessageService");
 const { getUserPttImages } = require("../services/pttImageService");
@@ -141,6 +146,66 @@ router.get("/tracking/overview", async (req, res) => {
     return res.json({ generatedAt: new Date().toISOString(), staff });
   } catch (_error) {
     return res.status(500).json({ error: "failed to load tracking overview" });
+  }
+});
+
+router.get("/tracking/route", async (req, res) => {
+  try {
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : "";
+    if (!deviceId) return res.status(400).json({ error: "deviceId is required" });
+    const from = req.query.from ? String(req.query.from) : null;
+    const to = req.query.to ? String(req.query.to) : null;
+    const limit = Math.max(10, Math.min(5000, Number(req.query.limit) || 2000));
+    const { rows } = await pool.query(
+      `
+      SELECT lp.latitude, lp.longitude, lp.recorded_at
+      FROM location_points lp
+      INNER JOIN devices d ON d.id = lp.device_id
+      WHERE d.device_label = $1
+        AND ($2::timestamptz IS NULL OR lp.recorded_at >= $2::timestamptz)
+        AND ($3::timestamptz IS NULL OR lp.recorded_at <= $3::timestamptz)
+      ORDER BY lp.recorded_at ASC
+      LIMIT $4
+      `,
+      [deviceId, from, to, limit]
+    );
+    return res.json({
+      deviceId,
+      count: rows.length,
+      points: rows.map((r) => ({
+        lat: Number(r.latitude),
+        lon: Number(r.longitude),
+        at: r.recorded_at
+      }))
+    });
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to load route" });
+  }
+});
+
+router.get("/admin/devices", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    const devices = await listDevicesForAdmin();
+    return res.json({ devices });
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to load devices" });
+  }
+});
+
+router.put("/admin/devices/:deviceId/beacon", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    const deviceId = String(req.params.deviceId || "");
+    const updated = await updateDeviceBeaconSetting(deviceId, req.body || {});
+    if (!updated) return res.status(404).json({ error: "device not found" });
+    return res.json({ success: true, device: updated });
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to update beacon setting" });
   }
 });
 

@@ -15,6 +15,7 @@ const { getUserPttMessages } = require("../services/pttMessageService");
 const { getUserPttImages } = require("../services/pttImageService");
 const { savePttTextMessage } = require("../services/pttTextService");
 const { broadcastToChannel } = require("../ws/signalBus");
+const { listTrackers, createTracker, updateTracker, deleteTracker, getTrackerHistory } = require("../services/gpsTrackerService");
 const { getLicenseStatus, setLicenseKey, verifyDeviceActivationKey } = require("../services/licenseService");
 const { bypassDeviceValidation } = require("../config/env");
 const { getAudioProfileConfig, saveAudioProfileConfig, getActiveAudioProfile, getVoiceTransportMode } = require("../services/audioProfileService");
@@ -447,6 +448,69 @@ router.get("/admin/devices", async (req, res) => {
     return res.json({ devices });
   } catch (_error) {
     return res.status(500).json({ error: "failed to load devices" });
+  }
+});
+
+router.get("/admin/gps-trackers", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  try {
+    return res.json({ trackers: await listTrackers() });
+  } catch (_e) {
+    return res.status(500).json({ error: "failed to load gps trackers" });
+  }
+});
+
+router.post("/admin/gps-trackers", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  try {
+    const deviceId = String(req.body?.deviceId || "").trim();
+    const name = String(req.body?.name || "").trim();
+    const enabled = req.body?.enabled !== false;
+    const authKey = String(req.body?.authKey || "").trim();
+    const beaconMode = String(req.body?.beaconMode || "standard");
+    const keepIntervalSec = Number(req.body?.keepIntervalSec);
+    const submitIntervalSec = Number(req.body?.submitIntervalSec);
+    if (!deviceId || !name) return res.status(400).json({ error: "deviceId and name are required" });
+    await createTracker({ deviceId, name, enabled, authKey, beaconMode, keepIntervalSec, submitIntervalSec });
+    return res.json({ success: true, deviceId });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "failed to create tracker" });
+  }
+});
+
+router.put("/admin/gps-trackers/:deviceId", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  try {
+    const ok = await updateTracker(String(req.params.deviceId || ""), req.body || {});
+    if (!ok) return res.status(404).json({ error: "tracker not found or no updates" });
+    return res.json({ success: true });
+  } catch (_e) {
+    return res.status(500).json({ error: "failed to update tracker" });
+  }
+});
+
+router.delete("/admin/gps-trackers/:deviceId", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  try {
+    const ok = await deleteTracker(String(req.params.deviceId || ""));
+    if (!ok) return res.status(404).json({ error: "tracker not found" });
+    return res.json({ success: true });
+  } catch (_e) {
+    return res.status(500).json({ error: "failed to delete tracker" });
+  }
+});
+
+router.get("/admin/gps-trackers/:deviceId/history", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) return res.status(403).json({ error: "dispatcher role required" });
+  try {
+    const points = await getTrackerHistory(String(req.params.deviceId || ""), {
+      from: req.query.from ? String(req.query.from) : null,
+      to: req.query.to ? String(req.query.to) : null,
+      limit: req.query.limit ? Number(req.query.limit) : 2000
+    });
+    return res.json({ deviceId: String(req.params.deviceId || ""), count: points.length, points });
+  } catch (_e) {
+    return res.status(500).json({ error: "failed to load tracker history" });
   }
 });
 

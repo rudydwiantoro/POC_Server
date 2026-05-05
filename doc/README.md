@@ -87,6 +87,11 @@ Dispatch:
 - `GET /api/dispatch/about`
 - `GET /api/dispatch/overview`
 - `POST /api/dispatch/dispatcher/tts-broadcast` (dispatcher-only)
+- `GET /api/dispatch/admin/gps-trackers`
+- `POST /api/dispatch/admin/gps-trackers`
+- `PUT /api/dispatch/admin/gps-trackers/:deviceId`
+- `DELETE /api/dispatch/admin/gps-trackers/:deviceId`
+- `GET /api/dispatch/admin/gps-trackers/:deviceId/history?from=<iso>&to=<iso>&limit=<n>`
 - `GET /api/dispatch/tracking/overview`
 - `GET /api/dispatch/tracking/route?deviceId=<id>&from=<iso>&to=<iso>&limit=<n>`
 - `GET /api/dispatch/geofences`
@@ -115,6 +120,7 @@ Generator:
 Public config:
 - `GET /api/public/server-config` (untuk auto-fetch HTTP Base URL + WS URL dari APK/dispatcher guide)
 - `GET /.well-known/poc-radio-server-config.json` (config URL standar yang bisa di-scan/copy untuk onboarding device)
+- `POST /api/public/gps-tracker/beacon` (beacon-only tracker, no login)
 
 ## VPS Setup Untuk AutoConfig
 Supaya fitur autoconfig berjalan di HP user:

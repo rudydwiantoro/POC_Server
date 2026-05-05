@@ -6,6 +6,7 @@ const authRoutes = require("./routes/authRoutes");
 const channelRoutes = require("./routes/channelRoutes");
 const pttRoutes = require("./routes/pttRoutes");
 const locationRoutes = require("./routes/locationRoutes");
+const gpsTrackerPublicRoutes = require("./routes/gpsTrackerPublicRoutes");
 const dispatchRoutes = require("./routes/dispatchRoutes");
 const generatorRoutes = require("./routes/generatorRoutes");
 const { requireAuth } = require("./middleware/authMiddleware");
@@ -69,6 +70,7 @@ function createApp() {
   app.use("/api/channels", requireAuth, requireActiveLicense, channelRoutes);
   app.use("/api/ptt/floor", requireAuth, requireActiveLicense, pttRoutes);
   app.use("/api/location", requireAuth, requireActiveLicense, locationRoutes);
+  app.use("/api/public/gps-tracker", requireActiveLicense, gpsTrackerPublicRoutes);
   app.use("/api/dispatch", requireAuth, requireActiveLicense, dispatchRoutes);
 
   return app;

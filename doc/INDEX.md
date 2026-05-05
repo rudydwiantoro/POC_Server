@@ -6,6 +6,7 @@ Dokumentasi project dipusatkan di folder `doc/`.
 - [OPERATION_MANUAL_DISPATCHER.md](/d:/learn/pocserver/doc/OPERATION_MANUAL_DISPATCHER.md)
 - [server_setting.md](/d:/learn/pocserver/doc/server_setting.md)
 - [license_generator.md](/d:/learn/pocserver/doc/license_generator.md)
+- [gps_tracker.md](/d:/learn/pocserver/doc/gps_tracker.md)
 
 ## Dev
 - [README.md](/d:/learn/pocserver/doc/README.md)

@@ -179,6 +179,37 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS gps_trackers (
+  id UUID PRIMARY KEY,
+  device_id TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  auth_key TEXT,
+  beacon_mode TEXT NOT NULL DEFAULT 'standard',
+  keep_interval_sec INTEGER NOT NULL DEFAULT 30,
+  submit_interval_sec INTEGER NOT NULL DEFAULT 300,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE gps_trackers
+  ADD COLUMN IF NOT EXISTS beacon_mode TEXT NOT NULL DEFAULT 'standard',
+  ADD COLUMN IF NOT EXISTS keep_interval_sec INTEGER NOT NULL DEFAULT 30,
+  ADD COLUMN IF NOT EXISTS submit_interval_sec INTEGER NOT NULL DEFAULT 300;
+
+CREATE TABLE IF NOT EXISTS gps_tracker_points (
+  id BIGSERIAL PRIMARY KEY,
+  tracker_id UUID NOT NULL REFERENCES gps_trackers(id) ON DELETE CASCADE,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  accuracy_m DOUBLE PRECISION,
+  battery_level DOUBLE PRECISION,
+  recorded_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_gps_tracker_points_tracker_time
+  ON gps_tracker_points(tracker_id, recorded_at DESC);
+
 -- Backward-compatible patching for existing DBs created before beacon fields existed.
 ALTER TABLE devices
   ADD COLUMN IF NOT EXISTS beacon_enabled BOOLEAN NOT NULL DEFAULT FALSE,

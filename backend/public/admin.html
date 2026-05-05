@@ -107,6 +107,7 @@
         <button class="tab-btn" data-tab="usersTab">Users</button>
         <button class="tab-btn" data-tab="beaconTab">Beacon</button>
         <button class="tab-btn" data-tab="audioTab">Audio DSP</button>
+        <button class="tab-btn" data-tab="gpsTrackerTab">GPS Tracker</button>
         <button class="tab-btn" data-tab="backupTab">Backup</button>
       </div>
 
@@ -264,6 +265,46 @@
       </div>
       </div>
 
+      <div id="gpsTrackerTab" class="tab-panel">
+      <div class="card">
+        <div><b>GPS Tracker Admin</b></div>
+        <label for="gpsDeviceId">Device ID</label>
+        <input id="gpsDeviceId" placeholder="mis. gps-unit-01" />
+        <label for="gpsName">Name</label>
+        <input id="gpsName" placeholder="mis. Car Tracker 01" />
+        <label for="gpsAuthKey">Auth Key (optional)</label>
+        <input id="gpsAuthKey" placeholder="opsional untuk beacon tanpa login" />
+        <label for="gpsBeaconMode">Beacon Mode</label>
+        <select id="gpsBeaconMode">
+          <option value="standard">standard</option>
+          <option value="eco">eco</option>
+        </select>
+        <label for="gpsKeepIntervalSec">Keep Interval (sec)</label>
+        <input id="gpsKeepIntervalSec" type="number" min="5" max="3600" value="30" />
+        <label for="gpsSubmitIntervalSec">Submit Interval (sec)</label>
+        <input id="gpsSubmitIntervalSec" type="number" min="10" max="7200" value="300" />
+        <label><input id="gpsEnabled" type="checkbox" checked /> Enabled</label>
+        <button id="btnGpsCreate">Create Tracker</button>
+        <button id="btnGpsUpdate">Update Tracker</button>
+        <button id="btnGpsDelete">Delete Tracker</button>
+        <button id="btnGpsRefresh">Refresh Tracker List</button>
+        <div id="gpsTrackerList" class="small">No tracker loaded.</div>
+      </div>
+      <div class="card">
+        <div><b>GPS Tracker History / Route</b></div>
+        <label for="gpsHistoryDeviceId">Device ID</label>
+        <input id="gpsHistoryDeviceId" placeholder="mis. gps-unit-01" />
+        <label for="gpsHistoryFrom">From (ISO, optional)</label>
+        <input id="gpsHistoryFrom" placeholder="2026-01-01T00:00:00Z" />
+        <label for="gpsHistoryTo">To (ISO, optional)</label>
+        <input id="gpsHistoryTo" placeholder="2026-01-02T00:00:00Z" />
+        <label for="gpsHistoryLimit">Limit</label>
+        <input id="gpsHistoryLimit" type="number" min="10" max="5000" value="1000" />
+        <button id="btnGpsLoadHistory">Load History / Route</button>
+        <div id="gpsHistoryInfo" class="small">No history loaded.</div>
+      </div>
+      </div>
+
       <div id="backupTab" class="tab-panel">
       <div class="card">
         <div><b>Database Backup</b></div>
@@ -284,6 +325,7 @@
       let userPermState = { menuKeys: [], users: [] };
       let deviceBeaconCache = [];
       let audioProfileState = null;
+      let gpsTrackerCache = [];
 
       function setText(id, text) {
         document.getElementById(id).textContent = text;
@@ -340,8 +382,35 @@
         await loadPermissionAdminData();
         await loadDeviceBeaconAdmin();
         await loadAudioProfileAdmin();
+        await loadGpsTrackers();
         await loadUsersCrud();
         document.getElementById("loginGate").style.display = "none";
+      }
+
+      async function loadGpsTrackers() {
+        const data = await api("/api/dispatch/admin/gps-trackers");
+        gpsTrackerCache = Array.isArray(data.trackers) ? data.trackers : [];
+        if (!gpsTrackerCache.length) {
+          setText("gpsTrackerList", "No GPS tracker.");
+          return;
+        }
+        setText("gpsTrackerList", gpsTrackerCache.map((t) =>
+          `- ${t.deviceId} | ${t.name} | ${t.enabled ? "enabled" : "disabled"} | mode=${t.beaconMode || "standard"} keep=${t.keepIntervalSec || 30}s submit=${t.submitIntervalSec || 300}s | authKey: ${t.authKey ? "***" : "-"}`
+        ).join("\n"));
+        syncGpsTrackerForm();
+      }
+
+      function syncGpsTrackerForm() {
+        const deviceId = document.getElementById("gpsDeviceId").value.trim();
+        if (!deviceId) return;
+        const tracker = gpsTrackerCache.find((item) => item.deviceId === deviceId);
+        if (!tracker) return;
+        document.getElementById("gpsName").value = tracker.name || "";
+        document.getElementById("gpsAuthKey").value = tracker.authKey || "";
+        document.getElementById("gpsBeaconMode").value = tracker.beaconMode || "standard";
+        document.getElementById("gpsKeepIntervalSec").value = String(tracker.keepIntervalSec || 30);
+        document.getElementById("gpsSubmitIntervalSec").value = String(tracker.submitIntervalSec || 300);
+        document.getElementById("gpsEnabled").checked = Boolean(tracker.enabled);
       }
 
       async function loadAudioProfileAdmin() {
@@ -673,6 +742,86 @@
         } catch (e) {
           setText("backupInfo", `Backup failed: ${e.message}`);
           setText("mapInfo", `Backup failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnGpsCreate").onclick = async () => {
+        try {
+          await api("/api/dispatch/admin/gps-trackers", {
+            method: "POST",
+            body: JSON.stringify({
+              deviceId: document.getElementById("gpsDeviceId").value.trim(),
+              name: document.getElementById("gpsName").value.trim(),
+              authKey: document.getElementById("gpsAuthKey").value.trim(),
+              beaconMode: document.getElementById("gpsBeaconMode").value,
+              keepIntervalSec: Number(document.getElementById("gpsKeepIntervalSec").value) || 30,
+              submitIntervalSec: Number(document.getElementById("gpsSubmitIntervalSec").value) || 300,
+              enabled: document.getElementById("gpsEnabled").checked
+            })
+          });
+          await loadGpsTrackers();
+          setText("mapInfo", "GPS tracker created.");
+        } catch (e) {
+          setText("mapInfo", `Create GPS tracker failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnGpsUpdate").onclick = async () => {
+        const deviceId = document.getElementById("gpsDeviceId").value.trim();
+        try {
+          await api(`/api/dispatch/admin/gps-trackers/${encodeURIComponent(deviceId)}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              name: document.getElementById("gpsName").value.trim(),
+              authKey: document.getElementById("gpsAuthKey").value,
+              beaconMode: document.getElementById("gpsBeaconMode").value,
+              keepIntervalSec: Number(document.getElementById("gpsKeepIntervalSec").value) || 30,
+              submitIntervalSec: Number(document.getElementById("gpsSubmitIntervalSec").value) || 300,
+              enabled: document.getElementById("gpsEnabled").checked
+            })
+          });
+          await loadGpsTrackers();
+          setText("mapInfo", "GPS tracker updated.");
+        } catch (e) {
+          setText("mapInfo", `Update GPS tracker failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnGpsDelete").onclick = async () => {
+        const deviceId = document.getElementById("gpsDeviceId").value.trim();
+        try {
+          await api(`/api/dispatch/admin/gps-trackers/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+          await loadGpsTrackers();
+          setText("mapInfo", "GPS tracker deleted.");
+        } catch (e) {
+          setText("mapInfo", `Delete GPS tracker failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnGpsRefresh").onclick = async () => {
+        try {
+          await loadGpsTrackers();
+          setText("mapInfo", "GPS tracker refreshed.");
+        } catch (e) {
+          setText("mapInfo", `Refresh GPS tracker failed: ${e.message}`);
+        }
+      };
+      document.getElementById("gpsDeviceId").onchange = syncGpsTrackerForm;
+      document.getElementById("gpsDeviceId").onblur = syncGpsTrackerForm;
+      document.getElementById("btnGpsLoadHistory").onclick = async () => {
+        const deviceId = document.getElementById("gpsHistoryDeviceId").value.trim();
+        if (!deviceId) {
+          setText("gpsHistoryInfo", "deviceId required.");
+          return;
+        }
+        const qs = new URLSearchParams();
+        const from = document.getElementById("gpsHistoryFrom").value.trim();
+        const to = document.getElementById("gpsHistoryTo").value.trim();
+        const limit = Number(document.getElementById("gpsHistoryLimit").value) || 1000;
+        if (from) qs.set("from", from);
+        if (to) qs.set("to", to);
+        qs.set("limit", String(limit));
+        try {
+          const data = await api(`/api/dispatch/admin/gps-trackers/${encodeURIComponent(deviceId)}/history?${qs.toString()}`);
+          setText("gpsHistoryInfo", `count=${data.count}\n${JSON.stringify((data.points || []).slice(0, 50), null, 2)}`);
+        } catch (e) {
+          setText("gpsHistoryInfo", `Load history failed: ${e.message}`);
         }
       };
       async function loadBackupList() {

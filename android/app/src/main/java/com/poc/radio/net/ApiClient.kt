@@ -10,11 +10,19 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import android.util.Base64
 
 class ApiClient(
     private val baseUrl: String,
     private val httpClient: OkHttpClient = OkHttpClient()
 ) {
+    data class AudioProfile(
+        val id: String,
+        val name: String,
+        val rogerBeepEnabled: Boolean,
+        val rogerBeepHz: Int,
+        val rogerBeepMs: Int
+    )
     data class ActivationCheckResult(
         val activated: Boolean,
         val reason: String
@@ -24,6 +32,8 @@ class ApiClient(
         val role: String,
         val userId: String,
         val deviceId: String,
+        val voiceTransportMode: String,
+        val audioProfile: AudioProfile,
         val beaconEnabled: Boolean,
         val beaconIntervalMin: Int,
         val beaconDistanceKm: Double,
@@ -40,7 +50,9 @@ class ApiClient(
         val companyName: String,
         val serverName: String,
         val expiresAt: String?,
-        val deviceId: String
+        val deviceId: String,
+        val voiceTransportMode: String,
+        val audioProfile: AudioProfile?
     )
 
     fun login(userId: String, deviceId: String?): Result<LoginResult> = runCatching {
@@ -58,11 +70,20 @@ class ApiClient(
             if (!resp.isSuccessful) error("Login failed (${resp.code}): $body")
             val root = JSONObject(body)
             val user = root.getJSONObject("user")
+            val audio = user.optJSONObject("audioProfile")
             LoginResult(
                 accessToken = root.getString("accessToken"),
                 role = user.optString("role", "operator"),
                 userId = user.optString("userId", userId),
                 deviceId = user.optString("deviceId", safeDeviceId),
+                voiceTransportMode = if (user.optString("voiceTransportMode", "storeforward") == "webrtc") "webrtc" else "storeforward",
+                audioProfile = AudioProfile(
+                    id = audio?.optString("id", "clean_radio") ?: "clean_radio",
+                    name = audio?.optString("name", "Clean Radio") ?: "Clean Radio",
+                    rogerBeepEnabled = audio?.optBoolean("rogerBeepEnabled", false) ?: false,
+                    rogerBeepHz = audio?.optInt("rogerBeepHz", 1000) ?: 1000,
+                    rogerBeepMs = audio?.optInt("rogerBeepMs", 120) ?: 120
+                ),
                 beaconEnabled = user.optJSONObject("beacon")?.optBoolean("enabled", false) ?: false,
                 beaconIntervalMin = user.optJSONObject("beacon")?.optInt("intervalMin", 15) ?: 15,
                 beaconDistanceKm = user.optJSONObject("beacon")?.optDouble("distanceKm", 1.0) ?: 1.0,
@@ -151,6 +172,35 @@ class ApiClient(
         }
     }
 
+    fun uploadPttVoice(
+        accessToken: String,
+        userId: String,
+        deviceId: String,
+        channelId: String,
+        audioBytes: ByteArray,
+        mimeType: String,
+        durationMs: Int?
+    ): Result<String> = runCatching {
+        val payload = JSONObject()
+            .put("userId", userId)
+            .put("deviceId", deviceId)
+            .put("channelId", channelId)
+            .put("mimeType", mimeType)
+            .put("audioBase64", Base64.encodeToString(audioBytes, Base64.NO_WRAP))
+            .put("durationMs", durationMs)
+            .toString()
+        val req = Request.Builder()
+            .url("$baseUrl/api/ptt/floor/messages/upload")
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .addHeader("Authorization", "Bearer $accessToken")
+            .build()
+        httpClient.newCall(req).execute().use { resp ->
+            val body = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) error("Upload voice failed (${resp.code}): $body")
+            JSONObject(body).getJSONObject("message").optString("audioUrl", "")
+        }
+    }
+
     fun getMyHistory(accessToken: String, userId: String, limit: Int): Result<MyHistory> = runCatching {
         val req = Request.Builder()
             .url("$baseUrl/api/dispatch/staff/${URLEncoder.encode(userId, StandardCharsets.UTF_8.toString())}/messages?limit=$limit")
@@ -221,7 +271,17 @@ class ApiClient(
                 companyName = root.optString("companyName", "-"),
                 serverName = root.optString("serverName", "-"),
                 expiresAt = if (root.isNull("expiresAt")) null else root.optString("expiresAt"),
-                deviceId = root.optString("deviceId", "-")
+                deviceId = root.optString("deviceId", "-"),
+                voiceTransportMode = if (root.optString("voiceTransportMode", "storeforward") == "webrtc") "webrtc" else "storeforward",
+                audioProfile = root.optJSONObject("audioProfile")?.let { audio ->
+                    AudioProfile(
+                        id = audio.optString("id", "clean_radio"),
+                        name = audio.optString("name", "Clean Radio"),
+                        rogerBeepEnabled = audio.optBoolean("rogerBeepEnabled", false),
+                        rogerBeepHz = audio.optInt("rogerBeepHz", 1000),
+                        rogerBeepMs = audio.optInt("rogerBeepMs", 120)
+                    )
+                }
             )
         }
     }

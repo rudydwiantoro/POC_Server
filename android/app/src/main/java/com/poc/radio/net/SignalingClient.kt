@@ -14,11 +14,16 @@ class SignalingClient(
     private val channelIdProvider: () -> String,
     private val callback: Callback
 ) {
-    interface Callback {
+interface Callback {
         fun onStatus(status: String)
         fun onFloorHolder(userId: String?)
         fun onPttTextMessage(userId: String?, text: String)
         fun onPttImageMessage(userId: String?, imageUrl: String, noteText: String)
+        fun onPeerJoined(userId: String)
+        fun onJoinAck(peers: List<String>)
+        fun onWebRtcOffer(fromUserId: String, sdpType: String, sdp: String)
+        fun onWebRtcAnswer(fromUserId: String, sdpType: String, sdp: String)
+        fun onWebRtcIce(fromUserId: String, candidate: JSONObject)
         fun onError(message: String)
     }
 
@@ -64,6 +69,40 @@ class SignalingClient(
                                     msg.optString("imageUrl", ""),
                                     msg.optString("noteText", "")
                                 )
+                            }
+                            "peer_joined" -> {
+                                val peer = msg.optString("userId", "")
+                                if (peer.isNotBlank()) callback.onPeerJoined(peer)
+                            }
+                            "join_ack" -> {
+                                val peers = mutableListOf<String>()
+                                val arr = msg.optJSONArray("peers")
+                                if (arr != null) {
+                                    for (i in 0 until arr.length()) {
+                                        val p = arr.optString(i, "")
+                                        if (p.isNotBlank()) peers += p
+                                    }
+                                }
+                                callback.onJoinAck(peers)
+                            }
+                            "webrtc_offer" -> {
+                                val from = msg.optString("fromUserId", "")
+                                val sdpObj = msg.optJSONObject("sdp")
+                                val t = sdpObj?.optString("type", "offer") ?: "offer"
+                                val s = sdpObj?.optString("sdp", "") ?: ""
+                                if (from.isNotBlank() && s.isNotBlank()) callback.onWebRtcOffer(from, t, s)
+                            }
+                            "webrtc_answer" -> {
+                                val from = msg.optString("fromUserId", "")
+                                val sdpObj = msg.optJSONObject("sdp")
+                                val t = sdpObj?.optString("type", "answer") ?: "answer"
+                                val s = sdpObj?.optString("sdp", "") ?: ""
+                                if (from.isNotBlank() && s.isNotBlank()) callback.onWebRtcAnswer(from, t, s)
+                            }
+                            "webrtc_ice" -> {
+                                val from = msg.optString("fromUserId", "")
+                                val cand = msg.optJSONObject("candidate")
+                                if (from.isNotBlank() && cand != null) callback.onWebRtcIce(from, cand)
                             }
                             "error" -> callback.onError(msg.optString("message", "signaling error"))
                         }
@@ -123,6 +162,36 @@ class SignalingClient(
                 .put("userId", userId)
                 .put("channelId", channelId)
                 .put("text", text)
+                .toString()
+        )
+    }
+
+    fun sendWebRtcOffer(toUserId: String, type: String, sdp: String) {
+        ws?.send(
+            JSONObject()
+                .put("type", "webrtc_offer")
+                .put("toUserId", toUserId)
+                .put("sdp", JSONObject().put("type", type).put("sdp", sdp))
+                .toString()
+        )
+    }
+
+    fun sendWebRtcAnswer(toUserId: String, type: String, sdp: String) {
+        ws?.send(
+            JSONObject()
+                .put("type", "webrtc_answer")
+                .put("toUserId", toUserId)
+                .put("sdp", JSONObject().put("type", type).put("sdp", sdp))
+                .toString()
+        )
+    }
+
+    fun sendWebRtcIce(toUserId: String, candidate: JSONObject) {
+        ws?.send(
+            JSONObject()
+                .put("type", "webrtc_ice")
+                .put("toUserId", toUserId)
+                .put("candidate", candidate)
                 .toString()
         )
     }

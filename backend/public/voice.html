@@ -118,8 +118,8 @@
             </select>
             <label>Voice Style</label>
             <select id="voiceStyle">
-              <option value="clean">clean</option>
-              <option value="radio">radio</option>
+              <option value="clean_radio">Clean Radio</option>
+              <option value="classic_ht">Classic HT</option>
             </select>
             </div>
             <div class="icon-row">
@@ -141,7 +141,37 @@
         token: "", ws: null, pc: null, localStream: null, outboundTrack: null, rawMicTrack: null,
         userId: "", deviceId: "", channelId: "engineering", joined: false, floorGranted: false,
         remoteUserId: null, floorHolderUserId: null, mediaRecorder: null, recordChunks: [], recordStartedAt: null,
-        audioContext: null, dryGain: null, wetGain: null, highPass: null, lowPass: null, compressor: null
+        audioContext: null, dryGain: null, wetGain: null, highPass: null, lowPass: null, compressor: null,
+        voiceTransportMode: "storeforward",
+        saturator: null, noiseGain: null, noiseSource: null, audioProfile: null
+      };
+      const BUILTIN_AUDIO_PROFILES = {
+        clean_radio: {
+          id: "clean_radio",
+          name: "Clean Radio",
+          bandPassLowHz: 300,
+          bandPassHighHz: 3400,
+          compressorRatio: 3,
+          saturationDrivePct: 6,
+          noiseEnabled: false,
+          noiseLevelDb: -42,
+          rogerBeepEnabled: false,
+          rogerBeepHz: 1000,
+          rogerBeepMs: 120
+        },
+        classic_ht: {
+          id: "classic_ht",
+          name: "Classic HT",
+          bandPassLowHz: 300,
+          bandPassHighHz: 3400,
+          compressorRatio: 3,
+          saturationDrivePct: 10,
+          noiseEnabled: true,
+          noiseLevelDb: -42,
+          rogerBeepEnabled: true,
+          rogerBeepHz: 1000,
+          rogerBeepMs: 120
+        }
       };
       const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
       const logEl = document.getElementById("log");
@@ -179,13 +209,23 @@
         state.token = data.accessToken;
         state.userId = userId;
         state.deviceId = deviceId;
+        state.voiceTransportMode = data.user && data.user.voiceTransportMode === "webrtc" ? "webrtc" : "storeforward";
+        state.audioProfile = (data.user && data.user.audioProfile) || BUILTIN_AUDIO_PROFILES.clean_radio;
         localStorage.setItem("poc_voice_user_id", userId);
         localStorage.setItem("poc_voice_device_id", deviceId);
         localStorage.setItem("poc_voice_channel", document.getElementById("channelId").value);
+        const selector = document.getElementById("voiceStyle");
+        if (selector && state.audioProfile && state.audioProfile.id) {
+          selector.value = state.audioProfile.id === "classic_ht" ? "classic_ht" : "clean_radio";
+          selector.disabled = true;
+          selector.title = "Managed from Admin Settings";
+        }
         document.getElementById("whoami").textContent = `${userId} / ${deviceId}`;
+        setStatus(`mode: ${state.voiceTransportMode}`);
         return data;
       }
       async function createPeerConnection() {
+        if (state.voiceTransportMode !== "webrtc") return null;
         if (state.pc) return state.pc;
         state.pc = new RTCPeerConnection(iceConfig);
         state.pc.onicecandidate = (event) => {
@@ -225,55 +265,107 @@
         state.lowPass = state.audioContext.createBiquadFilter();
         state.lowPass.type = "lowpass";
         state.compressor = state.audioContext.createDynamicsCompressor();
+        state.saturator = state.audioContext.createWaveShaper();
+        state.noiseGain = state.audioContext.createGain();
         source.connect(state.dryGain);
         source.connect(state.highPass);
         state.highPass.connect(state.lowPass);
         state.lowPass.connect(state.compressor);
-        state.compressor.connect(state.wetGain);
+        state.compressor.connect(state.saturator);
+        state.saturator.connect(state.wetGain);
         state.dryGain.connect(dest);
         state.wetGain.connect(dest);
+        state.noiseGain.connect(dest);
         state.localStream = dest.stream;
         applyVoiceStyle(document.getElementById("voiceStyle").value);
         state.outboundTrack = state.localStream.getAudioTracks()[0];
         state.outboundTrack.enabled = false;
         const pc = await createPeerConnection();
-        state.localStream.getTracks().forEach((t) => pc.addTrack(t, state.localStream));
+        if (pc) state.localStream.getTracks().forEach((t) => pc.addTrack(t, state.localStream));
         log("local mic ready");
+      }
+
+      function buildSaturationCurve(drivePct) {
+        const amount = Math.max(0, Math.min(50, Number(drivePct) || 0)) / 50;
+        const k = 2 + amount * 20;
+        const n = 1024;
+        const curve = new Float32Array(n);
+        for (let i = 0; i < n; i += 1) {
+          const x = (i * 2) / n - 1;
+          curve[i] = ((1 + k) * x) / (1 + k * Math.abs(x));
+        }
+        return curve;
+      }
+
+      function ensureNoiseSource() {
+        if (!state.audioContext || state.noiseSource) return;
+        const bufferSize = state.audioContext.sampleRate * 2;
+        const buffer = state.audioContext.createBuffer(1, bufferSize, state.audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i += 1) data[i] = Math.random() * 2 - 1;
+        const src = state.audioContext.createBufferSource();
+        src.buffer = buffer;
+        src.loop = true;
+        src.connect(state.noiseGain);
+        src.start();
+        state.noiseSource = src;
       }
 
       function applyVoiceStyle(style) {
         if (!state.dryGain || !state.wetGain || !state.highPass || !state.lowPass || !state.compressor) return;
-        if (style === "radio") {
-          state.dryGain.gain.value = 0.0;
-          state.wetGain.gain.value = 1.0;
-          state.highPass.frequency.value = 350;
-          state.lowPass.frequency.value = 3000;
-          state.compressor.threshold.value = -30;
-          state.compressor.ratio.value = 4;
-          state.compressor.attack.value = 0.003;
-          state.compressor.release.value = 0.25;
+        const profile = state.audioProfile || BUILTIN_AUDIO_PROFILES.clean_radio;
+        state.dryGain.gain.value = 0.0;
+        state.wetGain.gain.value = 1.0;
+        state.highPass.frequency.value = Number(profile.bandPassLowHz) || 300;
+        state.lowPass.frequency.value = Number(profile.bandPassHighHz) || 3400;
+        state.compressor.threshold.value = -26;
+        state.compressor.ratio.value = Number(profile.compressorRatio) || 3;
+        state.compressor.attack.value = 0.003;
+        state.compressor.release.value = 0.2;
+        state.saturator.curve = buildSaturationCurve(Number(profile.saturationDrivePct) || 0);
+        state.saturator.oversample = "4x";
+        ensureNoiseSource();
+        if (profile.noiseEnabled) {
+          const noiseDb = Number(profile.noiseLevelDb);
+          state.noiseGain.gain.value = Math.pow(10, ((Number.isFinite(noiseDb) ? noiseDb : -42) / 20));
         } else {
-          state.dryGain.gain.value = 1.0;
-          state.wetGain.gain.value = 0.0;
-          state.highPass.frequency.value = 120;
-          state.lowPass.frequency.value = 7000;
-          state.compressor.threshold.value = -20;
-          state.compressor.ratio.value = 2;
-          state.compressor.attack.value = 0.005;
-          state.compressor.release.value = 0.1;
+          state.noiseGain.gain.value = 0.0;
         }
         log("voice style", { style });
       }
+
+      async function playRogerBeepIfEnabled() {
+        const p = state.audioProfile || {};
+        if (!p.rogerBeepEnabled || !state.audioContext) return;
+        const ms = Math.max(40, Number(p.rogerBeepMs) || 120);
+        const hz = Math.max(300, Number(p.rogerBeepHz) || 1000);
+        const osc = state.audioContext.createOscillator();
+        const gain = state.audioContext.createGain();
+        osc.type = "sine";
+        osc.frequency.value = hz;
+        gain.gain.value = 0.18;
+        osc.connect(gain);
+        gain.connect(state.wetGain);
+        osc.start();
+        await new Promise((resolve) => setTimeout(resolve, ms));
+        osc.stop();
+        osc.disconnect();
+        gain.disconnect();
+      }
       async function makeOffer(toUserId) {
+        if (state.voiceTransportMode !== "webrtc") return;
         state.remoteUserId = toUserId;
         const pc = await createPeerConnection();
+        if (!pc) return;
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         sendWs({ type: "webrtc_offer", toUserId, sdp: offer });
       }
       async function handleOffer(fromUserId, sdp) {
+        if (state.voiceTransportMode !== "webrtc") return;
         state.remoteUserId = fromUserId;
         const pc = await createPeerConnection();
+        if (!pc) return;
         await pc.setRemoteDescription(new RTCSessionDescription(sdp));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -339,17 +431,19 @@
         state.ws.onmessage = async (event) => {
           const msg = JSON.parse(event.data);
           if (msg.type === "peer_joined" && msg.userId !== state.userId) {
-            if (state.userId < msg.userId) await makeOffer(msg.userId);
+            if (state.voiceTransportMode === "webrtc" && state.userId < msg.userId) await makeOffer(msg.userId);
           } else if (msg.type === "join_ack") {
             const peers = Array.isArray(msg.peers) ? msg.peers : [];
-            for (const p of peers) if (p !== state.userId && state.userId < p) await makeOffer(p);
+            if (state.voiceTransportMode === "webrtc") for (const p of peers) if (p !== state.userId && state.userId < p) await makeOffer(p);
           } else if (msg.type === "webrtc_offer" && msg.fromUserId !== state.userId) {
             await handleOffer(msg.fromUserId, msg.sdp);
           } else if (msg.type === "webrtc_answer" && msg.fromUserId === state.remoteUserId) {
             const pc = await createPeerConnection();
+            if (!pc) return;
             await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
           } else if (msg.type === "webrtc_ice" && msg.fromUserId === state.remoteUserId && msg.candidate) {
             const pc = await createPeerConnection();
+            if (!pc) return;
             await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
           } else if (msg.type === "floor_granted") {
             state.floorHolderUserId = msg.holder ? msg.holder.userId : null;
@@ -390,11 +484,13 @@
       };
       pttBtn.onmouseup = async () => {
         if (!state.joined) return;
+        await playRogerBeepIfEnabled();
         await stopAndUploadLocalPttRecording();
         sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
       };
       pttBtn.onmouseleave = async () => {
         if (!state.joined || !state.floorGranted) return;
+        await playRogerBeepIfEnabled();
         await stopAndUploadLocalPttRecording();
         sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
       };
@@ -407,6 +503,7 @@
       pttBtn.ontouchend = async (e) => {
         e.preventDefault();
         if (!state.joined) return;
+        await playRogerBeepIfEnabled();
         await stopAndUploadLocalPttRecording();
         sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
       };
@@ -462,7 +559,8 @@
       (async () => {
         const params = new URLSearchParams(location.search);
         const c = localStorage.getItem("poc_voice_channel") || "engineering";
-        const st = localStorage.getItem("poc_voice_style") || "clean";
+        const oldSt = localStorage.getItem("poc_voice_style") || "clean_radio";
+        const st = oldSt === "clean" ? "clean_radio" : (oldSt === "radio" ? "classic_ht" : oldSt);
         document.getElementById("channelId").value = params.get("channelId") || c;
         document.getElementById("voiceStyle").value = st;
         // When opened inside dispatcher quick-PTT panel, parent controls channel.

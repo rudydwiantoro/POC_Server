@@ -11,6 +11,10 @@ const {
   licenseParamC
 } = require("../config/env");
 
+const DEFAULT_TRIAL_DAYS = 10;
+const DEFAULT_TRIAL_MAX_DEVICES = 9999;
+const DEFAULT_TRIAL_MAX_ONLINE_DEVICES = 9999;
+
 function getLicenseSecret() {
   if (licenseSecretKey) return String(licenseSecretKey);
   return `${licenseParamA}|${licenseParamB}|${licenseParamC}`;
@@ -60,6 +64,28 @@ async function getCurrentLicense() {
   }
 }
 
+async function ensureDefaultTrialLicense(row) {
+  if (row) return row;
+  const expiresAt = new Date(Date.now() + DEFAULT_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  await pool.query(
+    `
+    INSERT INTO server_license (id, license_key, company_name, server_name, max_servers, max_devices, max_online_devices, expires_at, created_at, updated_at)
+    VALUES (1, $1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+    ON CONFLICT (id) DO NOTHING
+    `,
+    [
+      `TRIAL-${DEFAULT_TRIAL_DAYS}D-AUTO`,
+      companyName,
+      serverName,
+      Math.max(Number(serverInstanceCount) || 1, 1),
+      DEFAULT_TRIAL_MAX_DEVICES,
+      DEFAULT_TRIAL_MAX_ONLINE_DEVICES,
+      expiresAt.toISOString()
+    ]
+  );
+  return await getCurrentLicense();
+}
+
 async function setLicenseKey(licenseKey) {
   const l = verifyLicenseKey(licenseKey);
   if (!l.companyName || !l.serverName || !l.expiresAt) throw new Error("invalid_license_payload");
@@ -91,7 +117,7 @@ async function setLicenseKey(licenseKey) {
 }
 
 async function getLicenseStatus() {
-  const row = await getCurrentLicense();
+  const row = await ensureDefaultTrialLicense(await getCurrentLicense());
   if (!row) {
     return { active: false, reason: "license_not_set", companyName, serverName };
   }

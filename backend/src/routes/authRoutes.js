@@ -2,6 +2,7 @@ const express = require("express");
 const { issueAccessToken, issueRefreshToken, verifyToken } = require("../services/tokenService");
 const { getAllowedChannelsForUser, getUserWithDevice, getUserWithAnyDevice, activateDeviceForUser } = require("../services/accessService");
 const { getLicenseStatus } = require("../services/licenseService");
+const { getActiveAudioProfile, getVoiceTransportMode } = require("../services/audioProfileService");
 const { pool } = require("../db/pool");
 const { bypassLicenseValidation, bypassDeviceValidation } = require("../config/env");
 
@@ -29,6 +30,8 @@ router.post("/login", async (req, res) => {
       return res.status(403).json({ error: "device_not_activated_on_server" });
     }
     const lic = await getLicenseStatus();
+    const audioProfile = await getActiveAudioProfile();
+    const voiceTransportMode = await getVoiceTransportMode();
     if (!bypassLicenseValidation && !lic.active && account.role !== "dispatcher") {
       return res.status(403).json({ error: lic.reason || "license_inactive" });
     }
@@ -67,7 +70,9 @@ router.post("/login", async (req, res) => {
           companyName: lic.companyName || "-",
           serverName: lic.serverName || "-",
           expiresAt: lic.expiresAt || null
-        }
+        },
+        audioProfile,
+        voiceTransportMode
       }
     });
   } catch (error) {

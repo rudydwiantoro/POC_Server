@@ -7,6 +7,10 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.Manifest
+import android.content.pm.PackageManager
 import android.view.MotionEvent
 import android.view.View
 import android.widget.AdapterView
@@ -21,9 +25,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.poc.radio.net.ApiClient
 import com.poc.radio.net.SignalingClient
+import com.poc.radio.net.WebRtcAudioEngine
 import com.poc.radio.service.PttForegroundService
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.File
+import android.media.MediaRecorder
+import android.app.ActivityManager
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity(), SignalingClient.Callback {
@@ -43,6 +51,11 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
 
     private var signalingClient: SignalingClient? = null
     private var isConnected = false
+    private var mediaRecorder: MediaRecorder? = null
+    private var currentVoiceFile: File? = null
+    private var currentVoiceStartMs: Long = 0L
+    private var webRtcEngine: WebRtcAudioEngine? = null
+    private var currentPeerUserId: String? = null
     private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
         if (bmp != null) confirmAndUploadPhoto(bmp)
     }
@@ -50,6 +63,7 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        ensureMicPermission()
         if (AppConfig.beaconEnabled(this)) {
             startPttService()
         }
@@ -96,10 +110,21 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
             val channelId = selectedChannel()
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    if (isWebRtcMode()) {
+                        webRtcEngine?.setMicEnabled(true)
+                    } else {
+                        startVoiceRecording()
+                    }
                     signalingClient?.requestTalk(channelId)
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isWebRtcMode()) {
+                        webRtcEngine?.setMicEnabled(false)
+                    } else {
+                        stopAndUploadVoiceRecording(channelId)
+                    }
+                    playRogerBeepIfEnabled()
                     signalingClient?.releaseTalk(channelId)
                     true
                 }
@@ -123,6 +148,10 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
 
     private fun connectSignaling() {
         startPttService()
+        if (isWebRtcMode()) {
+            ensureWebRtcEngine()
+            webRtcEngine?.ensurePeerConnection()
+        }
         signalingClient = SignalingClient(
             wsUrl = AppConfig.wsUrl(this),
             userId = AppConfig.userId(this),
@@ -135,6 +164,9 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
     private fun disconnectSignaling() {
         signalingClient?.close()
         signalingClient = null
+        currentPeerUserId = null
+        webRtcEngine?.release()
+        webRtcEngine = null
         if (!AppConfig.beaconEnabled(this)) {
             stopService(Intent(this, PttForegroundService::class.java))
         }
@@ -153,7 +185,35 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopVoiceRecordingInternal()
         disconnectSignaling()
+    }
+
+    private fun isWebRtcMode(): Boolean = AppConfig.voiceTransportMode(this) == "webrtc"
+
+    private fun ensureWebRtcEngine() {
+        if (webRtcEngine != null) return
+        webRtcEngine = WebRtcAudioEngine(this, object : WebRtcAudioEngine.Callback {
+            override fun onLocalIceCandidate(candidate: JSONObject) {
+                val toUserId = currentPeerUserId ?: return
+                signalingClient?.sendWebRtcIce(toUserId, candidate)
+            }
+
+            override fun onRemoteAudioTrack() {
+                runOnUiThread { tvSignalStatus.text = "Signal: remote audio track connected" }
+            }
+
+            override fun onError(message: String) {
+                runOnUiThread { tvSignalStatus.text = "Signal: webrtc error ($message)" }
+            }
+        })
+    }
+
+    private fun ensureMicPermission() {
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 7001)
+        }
     }
 
     override fun onStatus(status: String) {
@@ -276,13 +336,151 @@ class MainActivity : AppCompatActivity(), SignalingClient.Callback {
                             "Company: ${it.companyName}\n" +
                                 "Server: ${it.serverName}\n" +
                                 "Device: ${it.deviceId}\n" +
-                                "License Expiry: ${it.expiresAt ?: "-"}"
+                                "License Expiry: ${it.expiresAt ?: "-"}\n" +
+                                "Voice Mode: ${it.voiceTransportMode}\n" +
+                                "Audio Profile: ${it.audioProfile?.name ?: AppConfig.audioProfileName(this)}"
                         )
                         .setPositiveButton("OK", null)
                         .show()
                 }.onFailure {
                     tvSignalStatus.text = "Signal: about unavailable"
                 }
+            }
+        }
+    }
+
+    override fun onPeerJoined(userId: String) {
+        if (!isWebRtcMode()) return
+        val me = AppConfig.userId(this)
+        if (userId == me) return
+        if (me < userId) {
+            ensureWebRtcEngine()
+            webRtcEngine?.ensurePeerConnection()
+            currentPeerUserId = userId
+            webRtcEngine?.createOffer { desc ->
+                signalingClient?.sendWebRtcOffer(userId, desc.type.canonicalForm(), desc.description)
+            }
+        }
+    }
+
+    override fun onJoinAck(peers: List<String>) {
+        if (!isWebRtcMode()) return
+        val me = AppConfig.userId(this)
+        val peer = peers.filter { it.isNotBlank() && it != me }.sorted().firstOrNull { me < it } ?: return
+        ensureWebRtcEngine()
+        webRtcEngine?.ensurePeerConnection()
+        currentPeerUserId = peer
+        webRtcEngine?.createOffer { desc ->
+            signalingClient?.sendWebRtcOffer(peer, desc.type.canonicalForm(), desc.description)
+        }
+    }
+
+    override fun onWebRtcOffer(fromUserId: String, sdpType: String, sdp: String) {
+        if (!isWebRtcMode()) return
+        ensureWebRtcEngine()
+        webRtcEngine?.ensurePeerConnection()
+        currentPeerUserId = fromUserId
+        webRtcEngine?.setRemoteDescription(sdpType, sdp)
+        webRtcEngine?.createAnswer { desc ->
+            signalingClient?.sendWebRtcAnswer(fromUserId, desc.type.canonicalForm(), desc.description)
+        }
+    }
+
+    override fun onWebRtcAnswer(fromUserId: String, sdpType: String, sdp: String) {
+        if (!isWebRtcMode()) return
+        currentPeerUserId = fromUserId
+        webRtcEngine?.setRemoteDescription(sdpType, sdp)
+    }
+
+    override fun onWebRtcIce(fromUserId: String, candidate: JSONObject) {
+        if (!isWebRtcMode()) return
+        currentPeerUserId = fromUserId
+        webRtcEngine?.addRemoteIce(candidate)
+    }
+
+    private fun startVoiceRecording() {
+        if (mediaRecorder != null) return
+        val output = File(cacheDir, "ptt-${System.currentTimeMillis()}.m4a")
+        currentVoiceFile = output
+        currentVoiceStartMs = System.currentTimeMillis()
+        val memoryClass = (getSystemService(ACTIVITY_SERVICE) as ActivityManager).memoryClass
+        val lowEndMode = memoryClass <= 128
+        runCatching {
+            val recorder = MediaRecorder()
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setAudioSamplingRate(if (lowEndMode) 12000 else 16000)
+            recorder.setAudioEncodingBitRate(if (lowEndMode) 24000 else 48000)
+            recorder.setAudioChannels(1)
+            recorder.setOutputFile(output.absolutePath)
+            recorder.prepare()
+            recorder.start()
+            mediaRecorder = recorder
+        }.onFailure {
+            tvSignalStatus.text = "Signal: start voice record gagal (${it.message})"
+            stopVoiceRecordingInternal()
+        }
+    }
+
+    private fun stopAndUploadVoiceRecording(channelId: String) {
+        val token = AppConfig.token(this)
+        val userId = AppConfig.userId(this)
+        val deviceId = AppConfig.deviceId(this)
+        val file = currentVoiceFile
+        stopVoiceRecordingInternal()
+        if (token.isBlank() || userId.isBlank() || deviceId.isBlank() || file == null || !file.exists()) return
+        val duration = (System.currentTimeMillis() - currentVoiceStartMs).toInt().coerceAtLeast(0)
+        thread {
+            val bytes = runCatching { file.readBytes() }.getOrNull()
+            if (bytes == null || bytes.isEmpty()) {
+                runOnUiThread { tvSignalStatus.text = "Signal: voice kosong, tidak diupload" }
+                runCatching { file.delete() }
+                return@thread
+            }
+            val upload = apiClient.uploadPttVoice(
+                accessToken = token,
+                userId = userId,
+                deviceId = deviceId,
+                channelId = channelId,
+                audioBytes = bytes,
+                mimeType = "audio/mp4",
+                durationMs = duration
+            )
+            runOnUiThread {
+                upload.onSuccess {
+                    tvSignalStatus.text = "Signal: voice uploaded"
+                }.onFailure {
+                    tvSignalStatus.text = "Signal: voice upload gagal (${it.message})"
+                }
+            }
+            runCatching { file.delete() }
+        }
+    }
+
+    private fun stopVoiceRecordingInternal() {
+        val recorder = mediaRecorder ?: return
+        runCatching { recorder.stop() }
+        runCatching { recorder.reset() }
+        runCatching { recorder.release() }
+        mediaRecorder = null
+    }
+
+    private fun playRogerBeepIfEnabled() {
+        if (!AppConfig.rogerBeepEnabled(this)) return
+        runCatching {
+            val hz = AppConfig.rogerBeepHz(this).coerceIn(300, 3000)
+            val ms = AppConfig.rogerBeepMs(this).coerceIn(40, 500)
+            val toneType = when {
+                hz >= 1500 -> ToneGenerator.TONE_DTMF_D
+                hz >= 900 -> ToneGenerator.TONE_DTMF_0
+                else -> ToneGenerator.TONE_DTMF_8
+            }
+            val tg = ToneGenerator(AudioManager.STREAM_MUSIC, 65)
+            try {
+                tg.startTone(toneType, ms)
+            } finally {
+                tg.release()
             }
         }
     }

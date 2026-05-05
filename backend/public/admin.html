@@ -106,6 +106,7 @@
         <button class="tab-btn" data-tab="permTab">Permissions</button>
         <button class="tab-btn" data-tab="usersTab">Users</button>
         <button class="tab-btn" data-tab="beaconTab">Beacon</button>
+        <button class="tab-btn" data-tab="audioTab">Audio DSP</button>
         <button class="tab-btn" data-tab="backupTab">Backup</button>
       </div>
 
@@ -209,6 +210,60 @@
       </div>
       </div>
 
+      <div id="audioTab" class="tab-panel">
+      <div class="card">
+        <div><b>Audio DSP Profile (Global)</b></div>
+        <label for="voiceTransportMode">Voice Transport Mode (Global)</label>
+        <select id="voiceTransportMode">
+          <option value="storeforward">storeforward</option>
+          <option value="webrtc">webrtc</option>
+        </select>
+        <label for="audioActiveProfile">Active Profile</label>
+        <select id="audioActiveProfile">
+          <option value="clean_radio">Clean Radio</option>
+          <option value="classic_ht">Classic HT</option>
+        </select>
+        <div class="small">Clean Radio</div>
+        <label for="cleanBandPassLowHz">Band-pass Low (Hz)</label>
+        <input id="cleanBandPassLowHz" type="number" min="50" max="1200" />
+        <label for="cleanBandPassHighHz">Band-pass High (Hz)</label>
+        <input id="cleanBandPassHighHz" type="number" min="1200" max="12000" />
+        <label for="cleanCompressorRatio">Compressor Ratio</label>
+        <input id="cleanCompressorRatio" type="number" min="1" max="20" step="0.1" />
+        <label for="cleanSaturationDrivePct">Saturation Drive (%)</label>
+        <input id="cleanSaturationDrivePct" type="number" min="0" max="50" />
+        <label><input id="cleanNoiseEnabled" type="checkbox" /> Noise Enabled</label>
+        <label for="cleanNoiseLevelDb">Noise Level (dB)</label>
+        <input id="cleanNoiseLevelDb" type="number" min="-80" max="-10" />
+        <label><input id="cleanRogerBeepEnabled" type="checkbox" /> Roger Beep Enabled</label>
+        <label for="cleanRogerBeepHz">Roger Beep Frequency (Hz)</label>
+        <input id="cleanRogerBeepHz" type="number" min="300" max="3000" />
+        <label for="cleanRogerBeepMs">Roger Beep Duration (ms)</label>
+        <input id="cleanRogerBeepMs" type="number" min="40" max="500" />
+
+        <div class="small" style="margin-top:10px;">Classic HT</div>
+        <label for="classicBandPassLowHz">Band-pass Low (Hz)</label>
+        <input id="classicBandPassLowHz" type="number" min="50" max="1200" />
+        <label for="classicBandPassHighHz">Band-pass High (Hz)</label>
+        <input id="classicBandPassHighHz" type="number" min="1200" max="12000" />
+        <label for="classicCompressorRatio">Compressor Ratio</label>
+        <input id="classicCompressorRatio" type="number" min="1" max="20" step="0.1" />
+        <label for="classicSaturationDrivePct">Saturation Drive (%)</label>
+        <input id="classicSaturationDrivePct" type="number" min="0" max="50" />
+        <label><input id="classicNoiseEnabled" type="checkbox" /> Noise Enabled</label>
+        <label for="classicNoiseLevelDb">Noise Level (dB)</label>
+        <input id="classicNoiseLevelDb" type="number" min="-80" max="-10" />
+        <label><input id="classicRogerBeepEnabled" type="checkbox" /> Roger Beep Enabled</label>
+        <label for="classicRogerBeepHz">Roger Beep Frequency (Hz)</label>
+        <input id="classicRogerBeepHz" type="number" min="300" max="3000" />
+        <label for="classicRogerBeepMs">Roger Beep Duration (ms)</label>
+        <input id="classicRogerBeepMs" type="number" min="40" max="500" />
+        <button id="btnLoadAudioProfile">Load Audio Profile</button>
+        <button id="btnSaveAudioProfile">Save Audio Profile</button>
+        <div class="small">Note: full DSP chain currently applied in `voice.html`. Android app currently applies roger beep + active profile sync.</div>
+      </div>
+      </div>
+
       <div id="backupTab" class="tab-panel">
       <div class="card">
         <div><b>Database Backup</b></div>
@@ -228,6 +283,7 @@
       let rolePermState = { menuKeys: [], roles: {} };
       let userPermState = { menuKeys: [], users: [] };
       let deviceBeaconCache = [];
+      let audioProfileState = null;
 
       function setText(id, text) {
         document.getElementById(id).textContent = text;
@@ -283,8 +339,46 @@
         await loadLicenseInfo();
         await loadPermissionAdminData();
         await loadDeviceBeaconAdmin();
+        await loadAudioProfileAdmin();
         await loadUsersCrud();
         document.getElementById("loginGate").style.display = "none";
+      }
+
+      async function loadAudioProfileAdmin() {
+        const data = await api("/api/dispatch/admin/audio-profile");
+        audioProfileState = data;
+        document.getElementById("voiceTransportMode").value = data.voiceTransportMode === "webrtc" ? "webrtc" : "storeforward";
+        document.getElementById("audioActiveProfile").value = data.activeProfileId || "clean_radio";
+        bindAudioProfileToForm("clean", (data.profiles || {}).clean_radio || {});
+        bindAudioProfileToForm("classic", (data.profiles || {}).classic_ht || {});
+      }
+
+      function bindAudioProfileToForm(prefix, p) {
+        document.getElementById(`${prefix}BandPassLowHz`).value = p.bandPassLowHz ?? 300;
+        document.getElementById(`${prefix}BandPassHighHz`).value = p.bandPassHighHz ?? 3400;
+        document.getElementById(`${prefix}CompressorRatio`).value = p.compressorRatio ?? 3;
+        document.getElementById(`${prefix}SaturationDrivePct`).value = p.saturationDrivePct ?? 6;
+        document.getElementById(`${prefix}NoiseEnabled`).checked = Boolean(p.noiseEnabled);
+        document.getElementById(`${prefix}NoiseLevelDb`).value = p.noiseLevelDb ?? -42;
+        document.getElementById(`${prefix}RogerBeepEnabled`).checked = Boolean(p.rogerBeepEnabled);
+        document.getElementById(`${prefix}RogerBeepHz`).value = p.rogerBeepHz ?? 1000;
+        document.getElementById(`${prefix}RogerBeepMs`).value = p.rogerBeepMs ?? 120;
+      }
+
+      function buildAudioProfileFromForm(prefix, id, name) {
+        return {
+          id,
+          name,
+          bandPassLowHz: Number(document.getElementById(`${prefix}BandPassLowHz`).value) || 300,
+          bandPassHighHz: Number(document.getElementById(`${prefix}BandPassHighHz`).value) || 3400,
+          compressorRatio: Number(document.getElementById(`${prefix}CompressorRatio`).value) || 3,
+          saturationDrivePct: Number(document.getElementById(`${prefix}SaturationDrivePct`).value) || 6,
+          noiseEnabled: document.getElementById(`${prefix}NoiseEnabled`).checked,
+          noiseLevelDb: Number(document.getElementById(`${prefix}NoiseLevelDb`).value) || -42,
+          rogerBeepEnabled: document.getElementById(`${prefix}RogerBeepEnabled`).checked,
+          rogerBeepHz: Number(document.getElementById(`${prefix}RogerBeepHz`).value) || 1000,
+          rogerBeepMs: Number(document.getElementById(`${prefix}RogerBeepMs`).value) || 120
+        };
       }
 
       async function loadUsersCrud() {
@@ -540,6 +634,34 @@
           setText("mapInfo", `Beacon setting saved: ${deviceId}`);
         } catch (e) {
           setText("mapInfo", `Save beacon failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnLoadAudioProfile").onclick = async () => {
+        try {
+          await loadAudioProfileAdmin();
+          setText("mapInfo", "Audio profile loaded.");
+        } catch (e) {
+          setText("mapInfo", `Load audio profile failed: ${e.message}`);
+        }
+      };
+      document.getElementById("btnSaveAudioProfile").onclick = async () => {
+        try {
+          const payload = {
+            voiceTransportMode: document.getElementById("voiceTransportMode").value === "webrtc" ? "webrtc" : "storeforward",
+            activeProfileId: document.getElementById("audioActiveProfile").value,
+            profiles: {
+              clean_radio: buildAudioProfileFromForm("clean", "clean_radio", "Clean Radio"),
+              classic_ht: buildAudioProfileFromForm("classic", "classic_ht", "Classic HT")
+            }
+          };
+          await api("/api/dispatch/admin/audio-profile", {
+            method: "PUT",
+            body: JSON.stringify(payload)
+          });
+          await loadAudioProfileAdmin();
+          setText("mapInfo", "Audio profile saved.");
+        } catch (e) {
+          setText("mapInfo", `Save audio profile failed: ${e.message}`);
         }
       };
       document.getElementById("btnRunBackup").onclick = async () => {

@@ -173,6 +173,12 @@ CREATE TABLE IF NOT EXISTS recycle_cleanup_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value_json JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Backward-compatible patching for existing DBs created before beacon fields existed.
 ALTER TABLE devices
   ADD COLUMN IF NOT EXISTS beacon_enabled BOOLEAN NOT NULL DEFAULT FALSE,

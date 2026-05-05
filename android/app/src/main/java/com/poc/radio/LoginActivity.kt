@@ -59,7 +59,13 @@ class LoginActivity : AppCompatActivity() {
                             beaconMode = it.beaconMode,
                             beaconBatchSize = it.beaconBatchSize,
                             beaconBatchMaxWaitMin = it.beaconBatchMaxWaitMin,
-                            beaconNormalSendMin = it.beaconNormalSendMin
+                            beaconNormalSendMin = it.beaconNormalSendMin,
+                            voiceTransportMode = it.voiceTransportMode,
+                            audioProfileId = it.audioProfile.id,
+                            audioProfileName = it.audioProfile.name,
+                            rogerBeepEnabled = it.audioProfile.rogerBeepEnabled,
+                            rogerBeepHz = it.audioProfile.rogerBeepHz,
+                            rogerBeepMs = it.audioProfile.rogerBeepMs
                         )
                         tvStatus.text = "Status: login success (${it.role})"
                         startActivity(Intent(this, MainActivity::class.java))

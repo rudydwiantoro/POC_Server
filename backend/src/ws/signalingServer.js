@@ -4,6 +4,7 @@ const { canAccessChannel, getUserByUsername, getUserWithDevice } = require("../s
 const { savePttTextMessage } = require("../services/pttTextService");
 const { registerBroadcaster } = require("./signalBus");
 const { getLicenseStatus } = require("../services/licenseService");
+const { getVoiceTransportMode } = require("../services/audioProfileService");
 const { setDeviceOnline, setDeviceOffline, getOnlineDeviceCount, isDeviceOnline } = require("./onlineState");
 const { bypassLicenseValidation } = require("../config/env");
 
@@ -177,6 +178,11 @@ function createSignalingServer(httpServer) {
         if (msg.type === "webrtc_offer" || msg.type === "webrtc_answer" || msg.type === "webrtc_ice") {
           if (!state.channelId || !state.userId) {
             send(ws, { type: "error", message: "join_channel required before WebRTC signaling" });
+            return;
+          }
+          const mode = await getVoiceTransportMode();
+          if (mode !== "webrtc") {
+            send(ws, { type: "error", message: "webrtc_disabled_by_admin" });
             return;
           }
 

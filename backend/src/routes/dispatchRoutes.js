@@ -15,6 +15,7 @@ const { getUserPttMessages } = require("../services/pttMessageService");
 const { getUserPttImages } = require("../services/pttImageService");
 const { getLicenseStatus, setLicenseKey, verifyDeviceActivationKey } = require("../services/licenseService");
 const { bypassDeviceValidation } = require("../config/env");
+const { getAudioProfileConfig, saveAudioProfileConfig, getActiveAudioProfile, getVoiceTransportMode } = require("../services/audioProfileService");
 
 const router = express.Router();
 const MENU_KEYS = [
@@ -42,16 +43,43 @@ router.get("/overview", async (req, res) => {
 router.get("/about", async (req, res) => {
   try {
     const lic = await getLicenseStatus();
+    const audioProfile = await getActiveAudioProfile();
+    const voiceTransportMode = await getVoiceTransportMode();
     return res.json({
       companyName: lic.companyName || "-",
       serverName: lic.serverName || "-",
       expiresAt: lic.expiresAt || null,
       active: Boolean(lic.active),
       deviceId: req.auth.deviceId,
-      userId: req.auth.userId
+      userId: req.auth.userId,
+      audioProfile,
+      voiceTransportMode
     });
   } catch (_error) {
     return res.status(500).json({ error: "failed to load about info" });
+  }
+});
+
+router.get("/admin/audio-profile", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    return res.json(await getAudioProfileConfig());
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to load audio profile config" });
+  }
+});
+
+router.put("/admin/audio-profile", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    const saved = await saveAudioProfileConfig(req.body || {});
+    return res.json({ success: true, config: saved });
+  } catch (_error) {
+    return res.status(500).json({ error: "failed to save audio profile config" });
   }
 });
 

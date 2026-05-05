@@ -384,6 +384,20 @@
           <div class="small">License & device activation moved to <a href="/admin.html" style="color:#7fd7ff;">Admin Settings</a>.</div>
         </div>
         <div class="box">
+          <div class="meta"><b>Dispatcher TTS Broadcast</b></div>
+          <label for="ttsChannel">Channel</label>
+          <select id="ttsChannel">
+            <option value="engineering">engineering</option>
+            <option value="housekeeping">housekeeping</option>
+            <option value="security">security</option>
+            <option value="all-call">all-call</option>
+          </select>
+          <label for="ttsText">Text</label>
+          <input id="ttsText" maxlength="160" placeholder="Ketik pesan untuk dibacakan" />
+          <button id="btnTtsBroadcast">Speak Local + Broadcast</button>
+          <div class="small">Hanya role dispatcher. Audio dibacakan lokal di browser dispatcher, penerima mendapat pesan text bertanda [TTS].</div>
+        </div>
+        <div class="box">
           <div class="meta"><b>Admin Modules</b></div>
           <div class="small">Geofence, permissions, beacon settings, and server settings have been moved to <a href="/admin.html" style="color:#7fd7ff;">Admin Settings</a>.</div>
         </div>
@@ -438,6 +452,7 @@
       let autoServerConfig = null;
       let routeLayer = null;
       let deviceBeaconCache = [];
+      let currentRole = "";
 
       function setText(id, text) {
         document.getElementById(id).textContent = text;
@@ -505,7 +520,14 @@
         localStorage.setItem("poc_dispatch_user_id", userId);
         localStorage.setItem("poc_dispatch_device_id", deviceId);
         const role = data.user ? data.user.role : "-";
+        currentRole = role;
         setText("loginStatus", `Logged in as ${userId} (${role})`);
+        const ttsBtn = document.getElementById("btnTtsBroadcast");
+        if (ttsBtn) {
+          const allow = role === "dispatcher";
+          ttsBtn.disabled = !allow;
+          ttsBtn.title = allow ? "Speak Local + Broadcast" : "Dispatcher only";
+        }
         await loadMyPermissions();
       }
 
@@ -932,6 +954,32 @@
         setText("mapInfo", `Route ${selectedStaff.deviceId}: ${pts.length} titik`);
       }
 
+      async function dispatcherTtsBroadcast() {
+        if (currentRole !== "dispatcher") {
+          setText("mapInfo", "Fitur ini hanya untuk dispatcher.");
+          return;
+        }
+        const channelId = document.getElementById("ttsChannel").value;
+        const text = (document.getElementById("ttsText").value || "").trim();
+        if (!text) {
+          setText("mapInfo", "TTS text wajib diisi.");
+          return;
+        }
+        if (!("speechSynthesis" in window)) {
+          setText("mapInfo", "Browser tidak mendukung speechSynthesis.");
+          return;
+        }
+        const utter = new SpeechSynthesisUtterance(text.slice(0, 160));
+        utter.lang = "id-ID";
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utter);
+        await api("/api/dispatch/dispatcher/tts-broadcast", {
+          method: "POST",
+          body: JSON.stringify({ channelId, text })
+        });
+        setText("mapInfo", `TTS broadcast sent to ${channelId}.`);
+      }
+
       async function refreshTracking() {
         ensureMap();
         const data = await api("/api/dispatch/tracking/overview");
@@ -1180,6 +1228,9 @@
       }
       document.getElementById("btnShowRoute").onclick = () => {
         showRouteForSelected().catch((e) => setText("mapInfo", `Load route failed: ${e.message}`));
+      };
+      document.getElementById("btnTtsBroadcast").onclick = () => {
+        dispatcherTtsBroadcast().catch((e) => setText("mapInfo", `TTS broadcast failed: ${e.message}`));
       };
 
       (async () => {

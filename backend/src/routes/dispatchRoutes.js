@@ -13,6 +13,8 @@ const {
 const { pool } = require("../db/pool");
 const { getUserPttMessages } = require("../services/pttMessageService");
 const { getUserPttImages } = require("../services/pttImageService");
+const { savePttTextMessage } = require("../services/pttTextService");
+const { broadcastToChannel } = require("../ws/signalBus");
 const { getLicenseStatus, setLicenseKey, verifyDeviceActivationKey } = require("../services/licenseService");
 const { bypassDeviceValidation } = require("../config/env");
 const { getAudioProfileConfig, saveAudioProfileConfig, getActiveAudioProfile, getVoiceTransportMode } = require("../services/audioProfileService");
@@ -264,6 +266,38 @@ router.post("/emergency/override", (req, res) => {
     message,
     at: new Date().toISOString()
   });
+});
+
+router.post("/dispatcher/tts-broadcast", async (req, res) => {
+  if (!canEmergencyOverride(req.auth.role)) {
+    return res.status(403).json({ error: "dispatcher role required" });
+  }
+  try {
+    const channelId = String(req.body?.channelId || "").trim();
+    const text = String(req.body?.text || "").trim();
+    if (!channelId) return res.status(400).json({ error: "channelId is required" });
+    if (!text) return res.status(400).json({ error: "text is required" });
+    const messageText = `[TTS] ${text.slice(0, 160)}`;
+    await savePttTextMessage({
+      userDbId: req.auth.userDbId,
+      channelCode: channelId,
+      messageText
+    });
+    const payload = {
+      type: "ptt_text",
+      channelId,
+      userId: req.auth.userId,
+      text: messageText,
+      createdAt: new Date().toISOString(),
+      source: "dispatcher_tts"
+    };
+    broadcastToChannel(channelId, payload);
+    return res.json({ success: true, channelId, text: messageText });
+  } catch (error) {
+    if (error.message === "channel_not_found") return res.status(404).json({ error: "channel not found" });
+    if (error.message === "message_empty" || error.message === "message_too_long") return res.status(400).json({ error: error.message });
+    return res.status(500).json({ error: "failed to send tts broadcast" });
+  }
 });
 
 router.get("/tracking/overview", async (req, res) => {

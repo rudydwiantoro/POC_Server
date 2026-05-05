@@ -59,6 +59,7 @@ Health:
 - geofence out-of-area alert + sound
 - role/user menu permission setup
 - staff action panel: click user/marker -> `Talk` + last voice message history (playback)
+- dispatcher local TTS broadcast (`Speak Local + Broadcast`, tagged `[TTS]`)
 
 ## API Summary
 Auth:
@@ -85,6 +86,7 @@ Location:
 Dispatch:
 - `GET /api/dispatch/about`
 - `GET /api/dispatch/overview`
+- `POST /api/dispatch/dispatcher/tts-broadcast` (dispatcher-only)
 - `GET /api/dispatch/tracking/overview`
 - `GET /api/dispatch/tracking/route?deviceId=<id>&from=<iso>&to=<iso>&limit=<n>`
 - `GET /api/dispatch/geofences`

@@ -105,6 +105,12 @@
               <button id="pttBtn" disabled>HOLD TO TALK</button>
               <div id="pttHint" class="small" style="display:none;"></div>
             </div>
+            <div id="ttsBox" style="margin-top:10px;display:none;">
+              <label>Text To Speech (Local)</label>
+              <input id="ttsText" maxlength="160" placeholder="Ketik teks untuk dibacakan" />
+              <button id="btnSpeakTts" style="margin-top:8px;">Speak To Channel</button>
+              <div class="small">Browser TTS lokal aktif; untuk kirim audio voice ke peer butuh engine TTS yang bisa export audio buffer.</div>
+            </div>
             <div id="status" class="status"></div>
           </div>
           <div class="right-stack">
@@ -139,11 +145,12 @@
     <script>
       const state = {
         token: "", ws: null, pc: null, localStream: null, outboundTrack: null, rawMicTrack: null,
-        userId: "", deviceId: "", channelId: "engineering", joined: false, floorGranted: false,
+        userId: "", deviceId: "", role: "", channelId: "engineering", joined: false, floorGranted: false,
         remoteUserId: null, floorHolderUserId: null, mediaRecorder: null, recordChunks: [], recordStartedAt: null,
         audioContext: null, dryGain: null, wetGain: null, highPass: null, lowPass: null, compressor: null,
         voiceTransportMode: "storeforward",
-        saturator: null, noiseGain: null, noiseSource: null, audioProfile: null
+        saturator: null, noiseGain: null, noiseSource: null, audioProfile: null,
+        ttsActive: false
       };
       const BUILTIN_AUDIO_PROFILES = {
         clean_radio: {
@@ -209,6 +216,7 @@
         state.token = data.accessToken;
         state.userId = userId;
         state.deviceId = deviceId;
+        state.role = data.user && data.user.role ? data.user.role : "";
         state.voiceTransportMode = data.user && data.user.voiceTransportMode === "webrtc" ? "webrtc" : "storeforward";
         state.audioProfile = (data.user && data.user.audioProfile) || BUILTIN_AUDIO_PROFILES.clean_radio;
         localStorage.setItem("poc_voice_user_id", userId);
@@ -221,6 +229,14 @@
           selector.title = "Managed from Admin Settings";
         }
         document.getElementById("whoami").textContent = `${userId} / ${deviceId}`;
+        const ttsBtn = document.getElementById("btnSpeakTts");
+        const ttsBox = document.getElementById("ttsBox");
+        if (ttsBtn) {
+          const allow = state.role === "dispatcher";
+          if (ttsBox) ttsBox.style.display = allow ? "block" : "none";
+          ttsBtn.disabled = !allow;
+          ttsBtn.title = allow ? "Speak local TTS + broadcast text" : "Dispatcher only";
+        }
         setStatus(`mode: ${state.voiceTransportMode}`);
         return data;
       }
@@ -415,12 +431,14 @@
           sendWs({ type: "floor_state", channelId: state.channelId });
           state.joined = true;
           pttBtn.disabled = false;
+          document.getElementById("btnSpeakTts").disabled = false;
           setConnected(true);
           setStatus("");
         };
         state.ws.onclose = () => {
           state.joined = false;
           pttBtn.disabled = true;
+          document.getElementById("btnSpeakTts").disabled = true;
           setConnected(false);
           setStatus("Disconnected");
         };
@@ -455,6 +473,44 @@
             setPttEnabled(false);
           }
         };
+      }
+
+      async function speakTtsToChannel(text) {
+        if (state.role !== "dispatcher") {
+          setStatus("TTS hanya untuk dispatcher");
+          return;
+        }
+        if (!text || !text.trim()) return;
+        if (!("speechSynthesis" in window)) {
+          setStatus("TTS tidak didukung browser ini");
+          return;
+        }
+        if (!state.joined) {
+          setStatus("Belum terhubung");
+          return;
+        }
+        const msg = text.trim().slice(0, 160);
+        state.ttsActive = true;
+        sendWs({ type: "request_talk", userId: state.userId, deviceId: state.deviceId, channelId: state.channelId });
+        // Also push text so receivers always get content even when raw TTS audio export is unavailable.
+        sendWs({ type: "ptt_text", userId: state.userId, channelId: state.channelId, text: `[TTS] ${msg}` });
+        const u = new SpeechSynthesisUtterance(msg);
+        u.lang = "id-ID";
+        u.rate = 1.0;
+        u.pitch = 1.0;
+        u.onend = () => {
+          state.ttsActive = false;
+          sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
+          setStatus("TTS selesai");
+        };
+        u.onerror = () => {
+          state.ttsActive = false;
+          sendWs({ type: "release_talk", userId: state.userId, channelId: state.channelId });
+          setStatus("TTS gagal");
+        };
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(u);
+        setStatus("TTS berjalan...");
       }
 
       async function startSession(userId, deviceId) {
@@ -545,6 +601,10 @@
         const hidden = b.style.display === "none";
         b.style.display = hidden ? "block" : "none";
         document.getElementById("btnToggleLog").title = hidden ? "Hide Log" : "Show Log";
+      };
+      document.getElementById("btnSpeakTts").onclick = async () => {
+        const t = document.getElementById("ttsText").value || "";
+        await speakTtsToChannel(t);
       };
       document.getElementById("channelId").onchange = () => {
         state.channelId = document.getElementById("channelId").value;

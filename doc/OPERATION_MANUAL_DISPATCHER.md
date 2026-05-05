@@ -81,6 +81,24 @@ Panel kanan:
 Setelah staff dipilih, klik `Talk` untuk membuka `voice.html` di tab baru dengan channel staff tersebut.
 Ini dipakai dispatcher untuk masuk komunikasi cepat pada channel yang sama.
 
+## 4.2 Dispatcher TTS Broadcast (Kantor -> Lapangan)
+Fitur ini hanya untuk akun role `dispatcher`.
+
+Tujuan:
+- dispatcher mengetik teks di office,
+- browser dispatcher membacakan teks secara lokal,
+- pesan dikirim ke channel sebagai text bertanda `[TTS]`.
+
+Langkah:
+1. Di panel kanan, buka `Dispatcher TTS Broadcast`.
+2. Pilih `Channel`.
+3. Isi `Text` (maks 160 karakter).
+4. Klik `Speak Local + Broadcast`.
+
+Catatan:
+- Audio dibacakan di browser dispatcher (local TTS).
+- Penerima menerima isi pesan melalui channel sebagai `ptt_text` bertanda `[TTS]`.
+
 ## 5. Geofence Alert
 Geofence area kerja default:
 - Hotel Area

@@ -74,7 +74,8 @@ class WebRtcAudioEngine(
             override fun onDataChannel(dc: org.webrtc.DataChannel) = Unit
             override fun onRenegotiationNeeded() = Unit
             override fun onAddTrack(receiver: RtpReceiver, mediaStreams: Array<out org.webrtc.MediaStream>) {
-                if (receiver.track() != null && receiver.track().kind() == "audio") {
+                val track = receiver.track()
+                if (track != null && track.kind() == "audio") {
                     callback.onRemoteAudioTrack()
                 }
             }
